@@ -1,0 +1,102 @@
+# version: "3.9"
+
+# services:
+#   nginx:
+#     image: nginx:alpine
+#     pull_policy: always
+#     container_name: nginx-proxy
+#     ports:
+#       - "80:80"
+#       - "443:443"
+#     volumes:
+#       - ./nginx/conf:/etc/nginx/conf.d
+#       - ./nginx/certbot/www:/var/www/certbot
+#       - ./nginx/certbot/conf:/etc/letsencrypt
+#     depends_on:
+#       - frontend
+#     restart: unless-stopped
+
+#   frontend:
+#     image: ghcr.io/novasafe-org/novasafe-ui:latest
+#     pull_policy: always
+#     container_name: frontend
+#     expose:
+#       - "8080"
+#     restart: unless-stopped
+
+#   certbot:
+#     image: certbot/certbot
+#     pull_policy: always
+#     container_name: certbot
+#     volumes:
+#       - ./nginx/certbot/www:/var/www/certbot
+#       - ./nginx/certbot/conf:/etc/letsencrypt
+#       - ./nginx/certbot/logs:/var/log/letsencrypt
+#     entrypoint: >
+#       sh -c "trap exit TERM;
+#       while :; do
+#         certbot renew;
+#         sleep 12h & wait $${!};
+#       done;"
+
+
+
+
+
+version: "3.9"
+
+services:
+  nginx:
+    image: nginx:alpine
+    pull_policy: always
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d
+      - ./nginx/certbot/www:/var/www/certbot
+      - ./nginx/certbot/conf:/etc/letsencrypt
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/novasafe-org/novasafe-ui:latest
+    pull_policy: always
+    container_name: frontend
+    expose:
+      - "8080"
+    restart: unless-stopped
+
+  backend:
+    image: ghcr.io/novasafe-org/novasafe-backend:latest
+    pull_policy: always
+    container_name: vault-backend
+    ports:
+      - "3123:3123"
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3123/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot
+    pull_policy: always
+    container_name: certbot
+    volumes:
+      - ./nginx/certbot/www:/var/www/certbot
+      - ./nginx/certbot/conf:/etc/letsencrypt
+      - ./nginx/certbot/logs:/var/log/letsencrypt
+    entrypoint: >
+      sh -c "trap exit TERM;
+      while :; do
+        certbot renew;
+        sleep 12h & wait $${!};
+      done;"
