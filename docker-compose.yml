@@ -70,7 +70,7 @@ services:
     pull_policy: always
     container_name: vault-backend
     expose:
-      - "5001"
+      - "3123"
     env_file:
       - .env
     healthcheck:
