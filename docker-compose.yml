@@ -1,48 +1,3 @@
-# version: "3.9"
-
-# services:
-#   nginx:
-#     image: nginx:alpine
-#     pull_policy: always
-#     container_name: nginx-proxy
-#     ports:
-#       - "80:80"
-#       - "443:443"
-#     volumes:
-#       - ./nginx/conf:/etc/nginx/conf.d
-#       - ./nginx/certbot/www:/var/www/certbot
-#       - ./nginx/certbot/conf:/etc/letsencrypt
-#     depends_on:
-#       - frontend
-#     restart: unless-stopped
-
-#   frontend:
-#     image: ghcr.io/novasafe-org/novasafe-ui:latest
-#     pull_policy: always
-#     container_name: frontend
-#     expose:
-#       - "8080"
-#     restart: unless-stopped
-
-#   certbot:
-#     image: certbot/certbot
-#     pull_policy: always
-#     container_name: certbot
-#     volumes:
-#       - ./nginx/certbot/www:/var/www/certbot
-#       - ./nginx/certbot/conf:/etc/letsencrypt
-#       - ./nginx/certbot/logs:/var/log/letsencrypt
-#     entrypoint: >
-#       sh -c "trap exit TERM;
-#       while :; do
-#         certbot renew;
-#         sleep 12h & wait $${!};
-#       done;"
-
-
-
-
-
 version: "3.9"
 
 services:
@@ -55,48 +10,88 @@ services:
       - "443:443"
     volumes:
       - ./nginx/conf:/etc/nginx/conf.d
-      - ./nginx/certbot/www:/var/www/certbot
-      - ./nginx/certbot/conf:/etc/letsencrypt
+      - ./nginx/cloudflare:/etc/nginx/cloudflare
     depends_on:
-      - frontend
+      - landing
+      - auth
+      - app
       - backend
+      - portainer
     restart: unless-stopped
 
-  frontend:
-    image: ghcr.io/novasafe-org/novasafe-ui:latest
+  # Marketing site - novasafe.io (SEO, no auth). Built by novasafe-landing repo workflow.
+  landing:
+    image: ghcr.io/novasafe-org/novasafe-landing:latest
     pull_policy: always
-    container_name: frontend
+    container_name: landing
     expose:
-      - "8080"
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
+  # Auth / onboarding - start.novasafe.io (login, signup, onboarding only). Built by novasafe-auth repo workflow.
+  auth:
+    image: ghcr.io/novasafe-org/novasafe-auth:latest
+    pull_policy: always
+    container_name: auth
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Main app - app.novasafe.io and *.novasafe.io (vault, dashboard). Built by novasafe-app repo workflow.
+  app:
+    image: ghcr.io/novasafe-org/novasafe-app:latest
+    pull_policy: always
+    container_name: app
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Backend: only reachable via nginx /api (no public port)
   backend:
     image: ghcr.io/novasafe-org/novasafe-backend:latest
     pull_policy: always
     container_name: vault-backend
-    ports:
-      - "3123:3123"
+    expose:
+      - "5001"
     env_file:
       - .env
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3123/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     restart: unless-stopped
 
-  certbot:
-    image: certbot/certbot
+  # Portainer - container monitoring/management. Exposed only via nginx at internal-docker.novasafe.io (IP-restricted).
+  portainer:
+    image: portainer/portainer-ce:latest
     pull_policy: always
-    container_name: certbot
+    container_name: portainer
     volumes:
-      - ./nginx/certbot/www:/var/www/certbot
-      - ./nginx/certbot/conf:/etc/letsencrypt
-      - ./nginx/certbot/logs:/var/log/letsencrypt
-    entrypoint: >
-      sh -c "trap exit TERM;
-      while :; do
-        certbot renew;
-        sleep 12h & wait $${!};
-      done;"
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    expose:
+      - "9000"
+    restart: unless-stopped
+
+volumes:
+  portainer_data:
