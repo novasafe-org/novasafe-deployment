@@ -1,0 +1,12 @@
+services:
+
+  app:
+
+    image: ghcr.io/novasafe-org/novasafe-app:latest
+
+    container_name: novasafe-app
+
+    networks:
+      - novasafe-network
+
+    restart: unless-stopped
