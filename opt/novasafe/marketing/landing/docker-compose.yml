@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+
+  landing:
+    image: ghcr.io/novasafe-org/novasafe-landing:latest
+
+    container_name: novasafe-landing
+
+    networks:
+      - novasafe-network
+
+    restart: unless-stopped
+
+networks:
+  novasafe-network:
+    external: true

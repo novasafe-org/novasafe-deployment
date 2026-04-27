@@ -1,0 +1,11 @@
+services:
+
+  auth:
+    image: ghcr.io/novasafe-org/novasafe-auth:latest
+
+    container_name: novasafe-auth
+
+    networks:
+      - novasafe-network
+
+    restart: unless-stopped
