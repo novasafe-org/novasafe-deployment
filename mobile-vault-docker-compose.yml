@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  mobile_vault:
+    image: ghcr.io/novasafe-org/novasafe-mobile-vault:latest
+    pull_policy: always
+    container_name: mobile-vault-backend
+    ports:
+      - "3124:3124"
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3124/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
