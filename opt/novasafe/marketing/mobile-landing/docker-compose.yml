@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+
+  mobile-landing:
+    image: ghcr.io/novasafe-org/novasafe-app-landing-page:latest
+
+    container_name: novasafe-mobile-landing
+
+    networks:
+      - novasafe-network
+
+    restart: unless-stopped
+
+networks:
+  novasafe-network:
+    external: true
