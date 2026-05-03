@@ -5,7 +5,7 @@ services:
   mobile-landing:
     image: ghcr.io/novasafe-org/novasafe-app-landing-page:latest
 
-    container_name: novasafe-mobile-landing
+    container_name: mobile-landing
 
     networks:
       - novasafe-network
