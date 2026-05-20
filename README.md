@@ -23,6 +23,7 @@ Build and push images for `landing` and `auth` from their repos, then point dock
 | Individual App      | https://app.novasafe.io |
 | Team App            | https://\<company\>.novasafe.io |
 | Portainer (internal) | https://internal-docker.novasafe.io (IP-restricted) |
+| Mobile vault API     | https://mobile-api.novasafe.io (see [MOBILE_API_DOMAIN.md](./MOBILE_API_DOMAIN.md)) |
 
 - **Landing**: Marketing only; no auth; SEO-indexed.
 - **Auth (start.\*)**: Login, signup, onboarding; short-lived; noindex.
