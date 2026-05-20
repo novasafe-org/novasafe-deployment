@@ -9,6 +9,7 @@ AUTH_DIR="$BASE_DIR/platform/auth"
 APP_DIR="$BASE_DIR/platform/app"
 BACKEND_DIR="$BASE_DIR/platform/backend"
 NGINX_DIR="$BASE_DIR/infra/nginx"
+MOBILE_API_DIR="$BASE_DIR/mobile-api"
 
 SERVICE=$1
 
@@ -81,6 +82,10 @@ nginx)
     deploy_service "$NGINX_DIR" "novasafe-nginx"
     ;;
 
+mobile-api)
+    deploy_service "$MOBILE_API_DIR" "mobile-vault-backend"
+    ;;
+
 all)
 
     echo "🚀 Deploying ALL services"
@@ -141,6 +146,7 @@ cleanup)
     echo "./deploy.sh app"
     echo "./deploy.sh backend"
     echo "./deploy.sh nginx"
+    echo "./deploy.sh mobile-api"
     echo "./deploy.sh all"
     echo ""
     echo "./deploy.sh status"
