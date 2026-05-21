@@ -83,7 +83,7 @@ nginx)
     ;;
 
 mobile-api)
-    deploy_service "$MOBILE_API_DIR" "mobile-vault-backend"
+    deploy_service "$MOBILE_API_DIR" "novasafe-mobile-vault"
     ;;
 
 all)
