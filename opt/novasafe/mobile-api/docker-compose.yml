@@ -8,7 +8,7 @@ services:
   mobile_vault:
     image: ghcr.io/novasafe-org/novasafe-mobile-vault:latest
     pull_policy: always
-    container_name: mobile-vault-backend
+    container_name: novasafe-mobile-vault
     env_file:
       - .env
     environment:
