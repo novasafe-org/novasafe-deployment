@@ -17,7 +17,7 @@ Examples:
 ## Architecture
 
 ```text
-Mobile app  →  https://mobile-api.novasafe.io  →  nginx  →  mobile-vault-backend:3124
+Mobile app  →  https://mobile-api.novasafe.io  →  nginx  →  novasafe-mobile-vault:3124
 ```
 
 | Path on server | Role |
