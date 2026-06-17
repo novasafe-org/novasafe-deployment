@@ -1,5 +1,5 @@
-# Canonical compose for /opt/novasafe/mobile-api on the production server.
-# Synced by .github/workflows/mobile-vault-service.yml (does not overwrite .env).
+# Canonical compose for /opt/novasafe-deployment/mobile-api on the production server.
+# Synced by novasafe-deployment deploy.sh / GitHub Actions (does not overwrite .env).
 # Public HTTPS: https://mobile-api.novasafe.io (nginx → novasafe-mobile-vault:3124).
 # Image is built from services/core (novasafe-core); service key kept for smooth migration.
 
@@ -29,7 +29,7 @@ services:
     ports:
       - "127.0.0.1:8085:3124"
     volumes:
-      - /opt/novasafe/mobile-api/logs:/app/logs
+      - /opt/novasafe-deployment/mobile-api/logs:/app/logs
     networks:
       - novasafe-network
     healthcheck:
