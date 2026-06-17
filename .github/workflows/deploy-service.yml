@@ -69,29 +69,88 @@ jobs:
           echo ""
           echo "──────────────────────────────────────────────────────────────"
 
-      - name: Validate SSH configuration
+      - name: Validate and configure SSH
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_REPO_PATH: ${{ secrets.DEPLOY_REPO_PATH }}
         run: |
           set -euo pipefail
+
+          trim() { printf '%s' "$1" | tr -d '[:space:]'; }
+
+          SSH_USER="$(trim "${SSH_USER}")"
+          SSH_HOST="$(trim "${SSH_HOST}")"
+          DEPLOY_PATH="$(trim "${DEPLOY_PATH}")"
+          DEPLOY_REPO_PATH="$(trim "${DEPLOY_REPO_PATH:-/opt/novasafe-deployment-repo}")"
+
+          # Strip accidental user@ or protocol prefixes from SSH_HOST
+          SSH_HOST="${SSH_HOST#*@}"
+          SSH_HOST="${SSH_HOST#*://}"
+          SSH_HOST="${SSH_HOST%%/*}"
+
           echo "▶ Checking required secrets..."
           if [ -z "${SSH_USER}" ] || [ -z "${SSH_HOST}" ] || [ -z "${DEPLOY_PATH}" ]; then
             echo "::error::Missing SSH_USER, SSH_HOST, or DEPLOY_PATH."
-            echo "::error::Add these as org secrets (all repos) OR repo secrets on BOTH the app repo AND novasafe-deployment."
+            echo "::error::Add org secrets accessible by novasafe-deployment and all app repos."
             exit 1
           fi
           if [ -z "${SSH_PASSWORD}" ] && [ -z "${SSH_PRIVATE_KEY}" ]; then
-            echo "::error::Missing SSH_PASSWORD. Set your VPS root password in GitHub secrets."
+            echo "::error::Missing SSH_PASSWORD."
             exit 1
           fi
+
+          # SSH_HOST must be VPS IP (recommended) or a resolvable hostname
+          if ! printf '%s' "${SSH_HOST}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "  ⚠ SSH_HOST is not an IPv4 address — using hostname (IP is recommended for Hostinger)"
+            if ! getent hosts "${SSH_HOST}" >/dev/null 2>&1; then
+              echo "::error::Cannot resolve SSH_HOST '${SSH_HOST}'. Use the Hostinger VPS public IP (e.g. 123.45.67.89), not a panel URL or username."
+              exit 1
+            fi
+          fi
+
           echo "  ✔ SSH_USER     : ${SSH_USER}"
           echo "  ✔ SSH_HOST     : ${SSH_HOST}"
           echo "  ✔ DEPLOY_PATH  : ${DEPLOY_PATH}"
           echo "  ✔ Auth method  : $([ -n "${SSH_PRIVATE_KEY}" ] && echo 'SSH key' || echo 'root password')"
+
+          echo "SSH_USER=${SSH_USER}" >> "${GITHUB_ENV}"
+          echo "SSH_HOST=${SSH_HOST}" >> "${GITHUB_ENV}"
+          echo "DEPLOY_PATH=${DEPLOY_PATH}" >> "${GITHUB_ENV}"
+          echo "DEPLOY_REPO_PATH=${DEPLOY_REPO_PATH}" >> "${GITHUB_ENV}"
+
+          echo "▶ Configuring SSH known_hosts..."
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          : > ~/.ssh/known_hosts
+
+          KEYSCAN_OK=0
+          for attempt in 1 2 3 4 5; do
+            echo "  ssh-keyscan attempt ${attempt}/5..."
+            if ssh-keyscan -T 10 -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null; then
+              KEYSCAN_OK=1
+              break
+            fi
+            sleep 3
+          done
+
+          if [ "${KEYSCAN_OK}" -ne 1 ]; then
+            echo "::error::ssh-keyscan failed for SSH_HOST '${SSH_HOST}'."
+            echo "::error::Verify the Hostinger VPS public IP in GitHub secret SSH_HOST (no spaces, no root@, no https://)."
+            exit 1
+          fi
+
+          chmod 600 ~/.ssh/known_hosts
+          echo "  ✔ known_hosts configured"
+
+          if [ -n "${SSH_PRIVATE_KEY}" ]; then
+            printf '%s\n' "${SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+            chmod 600 ~/.ssh/deploy_key
+            echo "  ✔ Deploy key loaded"
+          fi
 
       - name: Checkout deployment config
         uses: actions/checkout@v4
@@ -99,23 +158,6 @@ jobs:
           repository: novasafe-org/novasafe-deployment
           ref: master
           path: deployment-config
-
-      - name: Configure SSH
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          echo "▶ Configuring SSH known_hosts..."
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          ssh-keyscan -H "${SSH_HOST}" >> ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-          if [ -n "${SSH_PRIVATE_KEY}" ]; then
-            printf '%s\n' "${SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
-            chmod 600 ~/.ssh/deploy_key
-            echo "  ✔ Deploy key loaded"
-          fi
 
       - name: Install sshpass
         run: |
@@ -126,8 +168,6 @@ jobs:
 
       - name: Upload bootstrap scripts to VPS
         env:
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
         run: |
           set -euo pipefail
@@ -159,11 +199,7 @@ jobs:
 
       - name: Deploy on VPS
         env:
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          DEPLOY_REPO_PATH: ${{ secrets.DEPLOY_REPO_PATH }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
           SERVICE: ${{ inputs.service }}
