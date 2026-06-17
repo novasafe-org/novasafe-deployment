@@ -1,0 +1,75 @@
+# When deployment config changes, deploy only the affected services.
+
+name: Deploy Changed Services
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'opt/novasafe-deployment/**'
+      - '.github/workflows/deploy-service.yml'
+      - '.github/workflows/deploy-on-change.yml'
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+    steps:
+      - name: "━━━ Detect changed services ━━━"
+        run: |
+          echo ""
+          echo "╔══════════════════════════════════════════════════════════════╗"
+          echo "║         Deployment repo — detect changed paths               ║"
+          echo "╚══════════════════════════════════════════════════════════════╝"
+          echo "  Commit : ${{ github.sha }}"
+          echo "──────────────────────────────────────────────────────────────"
+
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            landing:
+              - 'opt/novasafe-deployment/marketing/landing/**'
+            mobile-landing:
+              - 'opt/novasafe-deployment/marketing/mobile-landing/**'
+            auth:
+              - 'opt/novasafe-deployment/platform/auth/**'
+            app:
+              - 'opt/novasafe-deployment/platform/app/**'
+            backend:
+              - 'opt/novasafe-deployment/platform/backend/**'
+            mobile-api:
+              - 'opt/novasafe-deployment/mobile-api/**'
+            nginx:
+              - 'opt/novasafe-deployment/infra/nginx/**'
+            portainer:
+              - 'opt/novasafe-deployment/infra/portainer/**'
+            sync:
+              - 'opt/novasafe-deployment/deploy.sh'
+          list-files: none
+
+      - name: "━━━ Services to deploy ━━━"
+        run: |
+          echo "  Changed services : ${{ steps.filter.outputs.changes }}"
+          echo "──────────────────────────────────────────────────────────────"
+
+  deploy:
+    needs: detect
+    if: needs.detect.outputs.services != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        service: ${{ fromJson(needs.detect.outputs.services) }}
+    uses: ./.github/workflows/deploy-service.yml
+    with:
+      service: ${{ matrix.service }}
+      sync_config: true
+      caller_repo: ${{ github.repository }}
+      caller_ref: ${{ github.ref_name }}@${{ github.sha }}
+    secrets: inherit
