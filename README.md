@@ -20,7 +20,7 @@ Deployment push  →  redeploy only changed services
 
 ## Quick start
 
-### 1. GitHub secrets (org level)
+### 1. GitHub secrets (org level — must include **all** repos)
 
 | Secret | Value |
 |---|---|
@@ -29,23 +29,33 @@ Deployment push  →  redeploy only changed services
 | `SSH_PASSWORD` | Root password |
 | `DEPLOY_PATH` | `/opt/novasafe-deployment` |
 
-### 2. Push this repo to `master`
+> **Important:** Org secrets must be accessible by **`novasafe-deployment`** and every app repo — not just landing/app. If you used "Selected repositories", add `novasafe-deployment` to the list.
 
-Workflows must exist before app repos can deploy.
+### 2. Enable reusable workflows (one-time org/repo setting)
 
-### 3. Copy `.env` + certs to the VPS (one time)
+`novasafe-deployment` → **Settings** → **Actions** → **General** → **Access**
+
+Set: **"Accessible from repositories in the 'novasafe-org' organization"**
+
+Without this, app repos get `workflow was not found` when calling `deploy-service.yml`.
+
+### 3. Push this repo to `master`
+
+Workflows must exist on GitHub **before** app repos can call them.
+
+### 4. Copy `.env` + certs to the VPS (one time)
 
 | File | VPS path |
 |---|---|
 | App / Auth / Backend / Mobile API `.env` | `platform/*/` and `mobile-api/` |
 | Cloudflare origin cert/key | `infra/nginx/cloudflare/` |
 
-### 4. Push any app repo
+### 5. Push any app repo
 
 First deploy on a **fresh VPS** auto-runs `initial-setup` + `first-boot`.  
 Services without `.env` are skipped until you copy them.
 
-### 5. Update DNS
+### 6. Update DNS
 
 Point Cloudflare A records to the new VPS IP.
 
