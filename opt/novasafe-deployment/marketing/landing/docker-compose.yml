@@ -1,0 +1,47 @@
+version: "3.9"
+
+# NovaSafe Landing (novasafe.io) — static SPA served by an in-container
+# nginx. No runtime envs — everything is baked into the bundle at build
+# time via GitHub Actions build-args.
+#
+# Cluster-wide port plan:
+#   landing → 3100   (this service)
+#   auth    → 3101
+#   app     → 3102
+#
+# `ports:` binds to 127.0.0.1 only — the public reverse-proxy nginx
+# (which terminates TLS) reaches us via the shared docker network using
+# the service name (`landing:3100`). Loopback-binding keeps the upstream
+# port reachable for `curl localhost:3100/health` on the host without
+# exposing it to the public internet.
+
+services:
+
+  landing:
+    image: ghcr.io/novasafe-org/novasafe-landing-v2:latest
+    container_name: novasafe-landing
+
+    ports:
+      - "127.0.0.1:3100:3100"
+
+    networks:
+      - novasafe-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --spider --method=HEAD http://localhost:3100/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  novasafe-network:
+    external: true
