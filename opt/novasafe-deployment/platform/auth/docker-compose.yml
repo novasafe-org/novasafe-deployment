@@ -1,0 +1,61 @@
+version: "3.9"
+
+# NovaSafe Auth (start.novasafe.io) — SSR Node service.
+#
+# Build-time `VITE_*` envs are baked into the GHCR image by the
+# `Build & Deploy Auth` GitHub workflow. Runtime envs below are read by
+# `process.env` inside the SSR Node server (TanStack Start server fns).
+#
+# Secrets are sourced from `auth.env` next to this file (gitignored). A
+# template lives at `auth.env.example` and is the canonical reference for
+# operators provisioning a new server.
+#
+# Cluster-wide port plan:
+#   landing → 3100
+#   auth    → 3101  (this service)
+#   app     → 3102
+#
+# `ports:` binds to 127.0.0.1 only — the public reverse-proxy nginx
+# reaches us via the shared docker network using `auth:3101`. Loopback
+# binding keeps the port reachable for on-box debugging without exposing
+# the SSR server to the public internet (and without bypassing TLS,
+# WAF rules, or the upstream proxy's security headers).
+
+services:
+
+  auth:
+    image: ghcr.io/novasafe-org/novasafe-auth-v2:latest
+    container_name: novasafe-auth
+
+    env_file:
+      - .env
+
+    environment:
+      NODE_ENV: production
+      PORT: "3101"
+      HOSTNAME: 0.0.0.0
+
+    ports:
+      - "127.0.0.1:3101:3101"
+
+    networks:
+      - novasafe-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --spider --method=HEAD http://localhost:3101/login || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  novasafe-network:
+    external: true

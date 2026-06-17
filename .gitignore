@@ -1,0 +1,16 @@
+./opt/novasafe-deployment/mobile-api/logs/*
+
+# .gitignore all the env files
+.env
+.env.local
+.env.*.local
+**/.env
+**/*.env
+**/*.env.*
+**/.env.local
+**/.env.*.local
+
+# .gitignore all the logs
+logs/*
+**/logs/*
+
