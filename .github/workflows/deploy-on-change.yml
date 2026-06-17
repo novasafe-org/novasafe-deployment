@@ -58,6 +58,26 @@ jobs:
           echo "  Changed services : ${{ steps.filter.outputs.changes }}"
           echo "──────────────────────────────────────────────────────────────"
 
+      - name: Validate deploy secrets
+        run: |
+          missing=0
+          for name in SSH_USER SSH_HOST SSH_PASSWORD DEPLOY_PATH; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing secret: ${name}"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "::error::Add org secrets with access to novasafe-deployment, or add repo secrets on novasafe-deployment."
+            exit 1
+          fi
+          echo "  OK All required deploy secrets are set"
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+
   deploy:
     needs: detect
     if: needs.detect.outputs.services != '[]'
@@ -72,4 +92,10 @@ jobs:
       sync_config: true
       caller_repo: ${{ github.repository }}
       caller_ref: ${{ github.ref_name }}@${{ github.sha }}
-    secrets: inherit
+    secrets:
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_REPO_PATH: ${{ secrets.DEPLOY_REPO_PATH }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}

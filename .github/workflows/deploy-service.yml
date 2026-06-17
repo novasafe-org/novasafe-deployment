@@ -6,8 +6,9 @@
 #   3. Runs first-boot (start stack; skips services without .env)
 #   4. Deploys the requested service
 #
-# Required secrets (use "secrets: inherit" in callers):
-#   SSH_USER, SSH_HOST, SSH_PASSWORD, DEPLOY_PATH
+# Required secrets — must exist on EVERY repo that calls this workflow
+# (including novasafe-deployment itself), or as org secrets with access
+# to all NovaSafe repos.
 
 name: Deploy Service
 
@@ -33,6 +34,19 @@ on:
         required: false
         type: string
         default: ''
+    secrets:
+      SSH_USER:
+        required: true
+      SSH_HOST:
+        required: true
+      SSH_PASSWORD:
+        required: true
+      DEPLOY_PATH:
+        required: true
+      DEPLOY_REPO_PATH:
+        required: false
+      SSH_PRIVATE_KEY:
+        required: false
 
 jobs:
   deploy:
@@ -66,7 +80,8 @@ jobs:
           set -euo pipefail
           echo "▶ Checking required secrets..."
           if [ -z "${SSH_USER}" ] || [ -z "${SSH_HOST}" ] || [ -z "${DEPLOY_PATH}" ]; then
-            echo "::error::Missing SSH_USER, SSH_HOST, or DEPLOY_PATH secret."
+            echo "::error::Missing SSH_USER, SSH_HOST, or DEPLOY_PATH."
+            echo "::error::Add these as org secrets (all repos) OR repo secrets on BOTH the app repo AND novasafe-deployment."
             exit 1
           fi
           if [ -z "${SSH_PASSWORD}" ] && [ -z "${SSH_PRIVATE_KEY}" ]; then

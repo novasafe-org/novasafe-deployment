@@ -554,7 +554,9 @@ rm /opt/novasafe-deployment/.novasafe-first-boot-done
 | `novasafe-network` not found | Network not created | `docker network create novasafe-network` |
 | TLS errors in browser | Certs missing/wrong | Check `infra/nginx/cloudflare/`, see CERTIFICATE_SETUP |
 | First-boot skips auth/app | No `.env` yet | Expected — copy `.env`, push app repo again |
-| Workflow can't call reusable WF | Org policy | Allow `novasafe-deployment` workflows in org Actions settings |
+| Workflow can't call reusable WF | Org policy | Allow reusable workflows from `novasafe-deployment` (see README step 2) |
+| `workflow was not found` | Workflow not on `@master` or access blocked | Push `novasafe-deployment` to master; enable org access |
+| `Missing SSH_USER, SSH_HOST, or DEPLOY_PATH` | Secrets not on `novasafe-deployment` | Add org secrets for all repos, or add repo secrets on `novasafe-deployment` |
 
 ### Useful debug commands
 
