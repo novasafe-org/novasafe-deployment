@@ -25,7 +25,7 @@ Deployment push  →  redeploy only changed services
 | Secret | Value |
 |---|---|
 | `SSH_USER` | `root` |
-| `SSH_HOST` | Hostinger VPS IP |
+| `SSH_HOST` | `123.45.67.89` | **VPS public IP only** (not hostname, not panel URL) |
 | `SSH_PASSWORD` | Root password |
 | `DEPLOY_PATH` | `/opt/novasafe-deployment` |
 
