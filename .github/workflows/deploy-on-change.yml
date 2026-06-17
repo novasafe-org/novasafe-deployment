@@ -51,11 +51,20 @@ jobs:
               - 'opt/novasafe-deployment/infra/portainer/**'
             sync:
               - 'opt/novasafe-deployment/deploy.sh'
+              - '.github/workflows/deploy-service.yml'
+              - '.github/workflows/deploy-on-change.yml'
           list-files: none
 
       - name: "━━━ Services to deploy ━━━"
         run: |
-          echo "  Changed services : ${{ steps.filter.outputs.changes }}"
+          CHANGES='${{ steps.filter.outputs.changes }}'
+          echo "  Changed services : ${CHANGES}"
+          if [ "${CHANGES}" = "[]" ]; then
+            echo ""
+            echo "  ℹ No service config changed — deploy matrix will be skipped."
+            echo "  ℹ This is normal for commits that only touch docs or unrelated files."
+            echo "  ℹ Workflow-only commits run 'sync' to refresh deploy.sh on the VPS."
+          fi
           echo "──────────────────────────────────────────────────────────────"
 
       - name: Validate deploy secrets

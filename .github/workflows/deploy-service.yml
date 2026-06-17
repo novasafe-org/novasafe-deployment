@@ -225,16 +225,30 @@ jobs:
 
             chmod +x "\${DEPLOY_SCRIPT}" 2>/dev/null || true
 
-            # ── Ensure ready (initial-setup + first-boot if needed) ───────
-            echo ""
-            echo "━━━ Pre-flight checks ━━━"
-            "\${DEPLOY_SCRIPT}" ensure-ready
-
-            # ── Sync latest config (unless deploy-on-change already synced) ─
+            # ── Sync latest config FIRST (updates deploy.sh before ensure-ready) ─
             if [ "${SYNC_CONFIG}" = "true" ] && [ "${SERVICE}" != "sync" ]; then
               echo ""
               echo "━━━ Sync latest config ━━━"
-              NOVASAFE_SKIP_SYNC=true "\${DEPLOY_SCRIPT}" sync
+              if [ -f "\${DEPLOY_SCRIPT}" ]; then
+                "\${DEPLOY_SCRIPT}" sync || bash "\${SETUP_SCRIPT}"
+              else
+                bash "\${SETUP_SCRIPT}"
+              fi
+            fi
+
+            # ── Ensure ready (initial-setup + first-boot if needed) ───────
+            echo ""
+            echo "━━━ Pre-flight checks ━━━"
+            if grep -q 'ensure-ready)' "\${DEPLOY_SCRIPT}"; then
+              "\${DEPLOY_SCRIPT}" ensure-ready
+              echo "  ✔ ensure-ready completed"
+            elif [ -f "/tmp/novasafe-scripts/initial-setup.sh" ]; then
+              echo "  ⚠ Old deploy.sh — running bootstrap scripts from /tmp"
+              bash "/tmp/novasafe-scripts/initial-setup.sh"
+              bash "/tmp/novasafe-scripts/first-boot.sh" || true
+            else
+              echo "  ✖ ensure-ready not available and no bootstrap scripts found"
+              exit 1
             fi
 
             # ── Deploy target service ─────────────────────────────────────
