@@ -7,9 +7,11 @@ services:
 
   portainer:
 
-    image: portainer/portainer-ce
+    image: portainer/portainer-ce:lts
 
     container_name: portainer
+
+    command: -H unix:///var/run/docker.sock
 
     environment:
       # Required behind reverse proxy — prevents bad redirects / CSRF issues
