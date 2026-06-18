@@ -2,8 +2,8 @@ version: "3.9"
 
 # NovaSafe App (app.novasafe.io) — SSR Node service.
 #
-# See `platform/auth/docker-compose.yml` for the rationale. Runtime env
-# comes from `.env` (copy from `.env.example` on the host).
+# All public `VITE_*` and server-only `AUTH_COOKIE_*` values are read from
+# `.env` next to this file at runtime. CI does not inject env into the image build.
 #
 # Cluster-wide port plan:
 #   landing → 3100

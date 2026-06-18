@@ -29,7 +29,6 @@ fi
 
 BOOT_SEQUENCE=(
     "nginx:false:novasafe-nginx"
-    "backend:true:novasafe-backend"
     "mobile-api:true:novasafe-mobile-vault"
     "auth:true:novasafe-auth"
     "app:true:novasafe-app"
@@ -55,7 +54,6 @@ for entry in "${BOOT_SEQUENCE[@]}"; do
     service_dir=""
     case "$service" in
         nginx)          service_dir="${BASE_DIR}/infra/nginx" ;;
-        backend)        service_dir="${BASE_DIR}/platform/backend" ;;
         mobile-api)     service_dir="${BASE_DIR}/mobile-api" ;;
         auth)           service_dir="${BASE_DIR}/platform/auth" ;;
         app)            service_dir="${BASE_DIR}/platform/app" ;;

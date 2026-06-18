@@ -1,8 +1,8 @@
 version: "3.9"
 
 # NovaSafe Landing (novasafe.io) — static SPA served by an in-container
-# nginx. No runtime envs — everything is baked into the bundle at build
-# time via GitHub Actions build-args.
+# nginx. Runtime public URLs come from the server `.env` (see env_file below).
+# The image entrypoint writes `runtime-config.js` at container start.
 #
 # Cluster-wide port plan:
 #   landing → 3100   (this service)
@@ -20,6 +20,10 @@ services:
   landing:
     image: ghcr.io/novasafe-org/novasafe-landing-v2:latest
     container_name: novasafe-landing
+
+    env_file:
+      - path: .env
+        required: false
 
     ports:
       - "127.0.0.1:3100:3100"

@@ -47,7 +47,7 @@ Workflows must exist on GitHub **before** app repos can call them.
 
 | File | VPS path |
 |---|---|
-| App / Auth / Backend / Mobile API `.env` | `platform/*/` and `mobile-api/` |
+| App / Auth / Mobile API `.env` | `platform/*/` and `mobile-api/` |
 | Cloudflare origin cert/key | `infra/nginx/cloudflare/` |
 
 ### 5. Push any app repo

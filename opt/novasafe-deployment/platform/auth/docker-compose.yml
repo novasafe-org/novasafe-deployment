@@ -2,13 +2,9 @@ version: "3.9"
 
 # NovaSafe Auth (start.novasafe.io) — SSR Node service.
 #
-# Build-time `VITE_*` envs are baked into the GHCR image by the
-# `Build & Deploy Auth` GitHub workflow. Runtime envs below are read by
-# `process.env` inside the SSR Node server (TanStack Start server fns).
-#
-# Secrets are sourced from `auth.env` next to this file (gitignored). A
-# template lives at `auth.env.example` and is the canonical reference for
-# operators provisioning a new server.
+# All public `VITE_*` and server-only `AUTH_COOKIE_*` values are read from
+# `.env` next to this file at runtime (SSR + browser injection). CI does not
+# inject env into the image build.
 #
 # Cluster-wide port plan:
 #   landing → 3100

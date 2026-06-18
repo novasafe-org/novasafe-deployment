@@ -22,7 +22,6 @@ LANDING_DIR="$BASE_DIR/marketing/landing"
 MOBILE_LANDING_DIR="$BASE_DIR/marketing/mobile-landing"
 AUTH_DIR="$BASE_DIR/platform/auth"
 APP_DIR="$BASE_DIR/platform/app"
-BACKEND_DIR="$BASE_DIR/platform/backend"
 MOBILE_API_DIR="$BASE_DIR/mobile-api"
 NGINX_DIR="$BASE_DIR/infra/nginx"
 PORTAINER_DIR="$BASE_DIR/infra/portainer"
@@ -420,7 +419,6 @@ run_service_deploy() {
         mobile-landing) deploy_compose_dir "${MOBILE_LANDING_DIR}" "mobile-landing" false ;;
         auth)           deploy_compose_dir "${AUTH_DIR}" "novasafe-auth" true ;;
         app)            deploy_compose_dir "${APP_DIR}" "novasafe-app" true ;;
-        backend)        deploy_compose_dir "${BACKEND_DIR}" "novasafe-backend" true ;;
         mobile-api)     deploy_mobile_api ;;
         nginx)          deploy_nginx ;;
         portainer)      deploy_compose_dir "${PORTAINER_DIR}" "portainer" false ;;
@@ -447,7 +445,6 @@ deploy_all_services() {
     fi
 
     for entry in \
-        "${BACKEND_DIR}:novasafe-backend:true" \
         "${MOBILE_API_DIR}:novasafe-mobile-vault:true" \
         "${AUTH_DIR}:novasafe-auth:true" \
         "${APP_DIR}:novasafe-app:true" \
@@ -493,7 +490,7 @@ sync)
     sync_config
     ;;
 
-landing|mobile-landing|auth|app|backend|mobile-api|nginx|portainer)
+landing|mobile-landing|auth|app|mobile-api|nginx|portainer)
     if [ "${NOVASAFE_SKIP_SYNC:-}" != "true" ]; then
         sync_config
     fi
@@ -552,7 +549,7 @@ cleanup)
     echo ""
     echo "  ./deploy.sh ensure-ready     Run initial-setup + first-boot if needed"
     echo "  ./deploy.sh sync             Pull repo + sync config"
-    echo "  ./deploy.sh landing | auth | app | backend | mobile-api | nginx | ..."
+    echo "  ./deploy.sh landing | auth | app | mobile-api | nginx | ..."
     echo "  ./deploy.sh all              Full stack (skips services without .env)"
     echo "  ./deploy.sh status | logs | restart | cleanup"
     echo ""

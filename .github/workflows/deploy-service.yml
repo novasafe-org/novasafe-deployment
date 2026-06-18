@@ -16,7 +16,7 @@ on:
   workflow_call:
     inputs:
       service:
-        description: Service key (landing, auth, app, backend, mobile-landing, mobile-api, nginx, portainer, sync)
+        description: Service key (landing, auth, app, mobile-landing, mobile-api, nginx, portainer, sync)
         required: true
         type: string
       sync_config:
