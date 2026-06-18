@@ -1,5 +1,8 @@
 version: "3.9"
 
+# Portainer — Docker UI at https://internal-docker.novasafe.io (nginx vhost only).
+# Independent of app/auth/landing; no host ports exposed.
+
 services:
 
   portainer:
@@ -7,6 +10,10 @@ services:
     image: portainer/portainer-ce
 
     container_name: portainer
+
+    environment:
+      # Required behind reverse proxy — prevents bad redirects / CSRF issues
+      TRUSTED_ORIGINS: https://internal-docker.novasafe.io
 
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

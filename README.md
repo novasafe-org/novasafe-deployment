@@ -56,7 +56,7 @@ Workflows must exist on GitHub **before** app repos can call them.
 |---|---|
 | App / Auth / Mobile API `.env` | `platform/*/` and `mobile-api/` |
 | Cloudflare origin cert/key | `infra/nginx/cloudflare/` |
-| Portainer IP allowlist | `infra/nginx/conf.d/internal-docker.allowed_ips.conf` |
+| Portainer IP allowlist | `infra/nginx/conf.d/internal-docker.allowed_ips.conf` (edit in repo, syncs on deploy) |
 
 ### 5. Push any app repo
 
@@ -98,6 +98,8 @@ cd /opt/novasafe-deployment
 | https://app.novasafe.io | App |
 | https://mobile-api.novasafe.io | Mobile API |
 | https://internal-docker.novasafe.io | Portainer (IP-restricted) |
+
+**Portainer redirecting to start.novasafe.io?** Usually `portainer.conf` is not on the VPS yet, or nginx was not reloaded. Run `./deploy.sh nginx` on the server. DNS must be an **A record** for `internal-docker` → VPS IP (not a CNAME to another subdomain). Check Cloudflare has no redirect rule for that hostname.
 
 ---
 

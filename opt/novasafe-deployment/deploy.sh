@@ -185,7 +185,6 @@ sync_config() {
         --exclude '**/.env.*' \
         --exclude 'logs/' \
         --exclude '**/logs/' \
-        --exclude 'infra/nginx/conf.d/internal-docker.allowed_ips.conf' \
         --exclude '.novasafe-initial-setup-done' \
         --exclude '.novasafe-first-boot-done' \
         "${REPO_ROOT}/opt/novasafe-deployment/" "${BASE_DIR}/"
