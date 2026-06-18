@@ -124,7 +124,6 @@ rsync -a \
     --exclude '**/.env.*' \
     --exclude 'logs/' \
     --exclude '**/logs/' \
-    --exclude 'infra/nginx/conf.d/internal-docker.allowed_ips.conf' \
     --exclude '.novasafe-initial-setup-done' \
     --exclude '.novasafe-first-boot-done' \
     "${REPO_ROOT}/opt/novasafe-deployment/" "${BASE_DIR}/"
@@ -139,13 +138,6 @@ log_ok "Config synced"
 # ── 6. Required directories ─────────────────────────────────────────────────
 ensure_directory "${BASE_DIR}/mobile-api/logs"
 ensure_directory "${BASE_DIR}/infra/nginx/cloudflare"
-
-ALLOWED_IPS="${BASE_DIR}/infra/nginx/conf.d/internal-docker.allowed_ips.conf"
-ALLOWED_IPS_EXAMPLE="${BASE_DIR}/infra/nginx/conf.d/internal-docker.allowed_ips.conf.example"
-if [ ! -f "${ALLOWED_IPS}" ] && [ -f "${ALLOWED_IPS_EXAMPLE}" ]; then
-    cp "${ALLOWED_IPS_EXAMPLE}" "${ALLOWED_IPS}"
-    log_ok "Created Portainer IP allowlist from example (edit before use)"
-fi
 
 # ── 7. Verify layout ────────────────────────────────────────────────────────
 log_section "Verification"
