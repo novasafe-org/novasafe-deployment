@@ -209,6 +209,7 @@ jobs:
           run_scp "${SCRIPT_SRC}/initial-setup.sh" "/tmp/novasafe-scripts/initial-setup.sh"
           run_scp "${SCRIPT_SRC}/first-boot.sh" "/tmp/novasafe-scripts/first-boot.sh"
           run_scp "${SCRIPT_SRC}/lib/logging.sh" "/tmp/novasafe-scripts/lib/logging.sh"
+          run_scp "${SCRIPT_SRC}/lib/common.sh" "/tmp/novasafe-scripts/lib/common.sh"
           run_remote "chmod +x /tmp/novasafe-scripts/*.sh /tmp/novasafe-scripts/lib/*.sh"
 
           echo "  Remote scripts:"

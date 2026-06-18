@@ -1,98 +1,122 @@
 #!/bin/bash
 #
-# One-time VPS bootstrap for a fresh Hostinger (or any) server.
-# Safe to re-run — skips steps that are already done.
+# One-time VPS bootstrap — safe to re-run; skips anything already present.
 #
 # Env:
 #   NOVASAFE_DEPLOY_PATH  (default: /opt/novasafe-deployment)
 #   NOVASAFE_DEPLOY_REPO  (default: /opt/novasafe-deployment-repo)
-#   NOVASAFE_DEPLOY_REPO_URL (default: novasafe-org repo on GitHub)
+#   NOVASAFE_DEPLOY_REPO_URL
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/logging.sh
 source "${SCRIPT_DIR}/lib/logging.sh"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
 
 REPO_ROOT="${NOVASAFE_DEPLOY_REPO:-/opt/novasafe-deployment-repo}"
 BASE_DIR="${NOVASAFE_DEPLOY_PATH:-/opt/novasafe-deployment}"
 REPO_URL="${NOVASAFE_DEPLOY_REPO_URL:-https://github.com/novasafe-org/novasafe-deployment.git}"
 MARKER_FILE="${BASE_DIR}/.novasafe-initial-setup-done"
 
-log_banner "NovaSafe Initial Setup" "Preparing a fresh VPS for automated deploys"
-
+log_banner "NovaSafe Initial Setup" "Preparing VPS for automated deploys"
 log_summary_row "Deploy path" "$BASE_DIR"
 log_summary_row "Git clone path" "$REPO_ROOT"
 log_summary_row "Repository" "$REPO_URL"
 log_divider
 
-# ── 1. System packages ──────────────────────────────────────────────────────
+# ── Fast path: already fully set up ─────────────────────────────────────────
+if [ -f "${MARKER_FILE}" ] \
+    && [ -f "${BASE_DIR}/deploy.sh" ] \
+    && [ -f "${BASE_DIR}/platform/app/docker-compose.yml" ] \
+    && command_exists docker \
+    && docker network inspect novasafe-network >/dev/null 2>&1; then
+    log_ok "Initial setup already complete ($(cat "${MARKER_FILE}"))"
+    log_info "Re-syncing config only..."
+    # fall through to git pull + rsync (non-destructive)
+fi
+
+# ── 1. System packages (never fail script on apt conflicts) ───────────────────
 log_section "System packages"
 
-if command -v apt-get >/dev/null 2>&1; then
-    log_step "Updating apt and installing dependencies"
-    log_cmd "apt-get update && apt-get install -y docker.io docker-compose-plugin git rsync curl ca-certificates"
+if command_exists apt-get; then
     export DEBIAN_FRONTEND=noninteractive
-    apt-get update -qq
-    apt-get install -y -qq docker.io docker-compose-plugin git rsync curl ca-certificates
-    log_ok "Packages installed"
+    log_step "Updating apt package lists"
+    apt-get update -qq || log_warn "apt-get update failed — continuing with cached indexes"
+
+    for pkg in git rsync curl ca-certificates; do
+        if command_exists "${pkg}"; then
+            log_ok "Already available: ${pkg}"
+        else
+            apt_install_if_missing "${pkg}" || true
+        fi
+    done
+
+    if command_exists docker; then
+        log_ok "Docker already present — skipping docker package install"
+        docker --version 2>/dev/null || true
+    else
+        log_step "Docker not found — attempting install"
+        apt-get install -y -qq docker.io 2>/dev/null \
+            || apt-get install -y -qq docker-ce docker-ce-cli containerd.io 2>/dev/null \
+            || log_warn "Docker package install failed — install Docker manually if needed"
+    fi
+
+    if docker compose version >/dev/null 2>&1 || command_exists docker-compose; then
+        log_ok "Compose CLI already available"
+    else
+        log_step "Installing compose plugin"
+        apt-get install -y -qq docker-compose-plugin 2>/dev/null \
+            || apt-get install -y -qq docker-compose 2>/dev/null \
+            || log_warn "Compose install skipped — may already exist under another name"
+    fi
 else
-    log_warn "apt-get not found — assuming Docker, git, and rsync are already installed"
+    log_warn "apt-get not found — assuming packages are pre-installed (Hostinger template)"
 fi
 
-# ── 2. Docker daemon ────────────────────────────────────────────────────────
-log_section "Docker"
+# ── 2. Docker CLI + daemon ────────────────────────────────────────────────────
+log_section "Docker runtime"
 
-if command -v docker >/dev/null 2>&1; then
-    log_ok "Docker CLI available: $(docker --version 2>/dev/null || echo 'unknown')"
-else
-    log_error "Docker is not available after install"
-    exit 1
-fi
-
-if systemctl is-active docker >/dev/null 2>&1; then
-    log_ok "Docker daemon is running"
-else
-    log_step "Starting Docker daemon"
-    systemctl enable docker 2>/dev/null || true
-    systemctl start docker 2>/dev/null || service docker start 2>/dev/null || true
-    log_ok "Docker daemon started"
-fi
+ensure_docker_cli || exit 1
+ensure_compose_cli || exit 1
+ensure_docker_daemon || true
 
 # ── 3. Docker network ───────────────────────────────────────────────────────
 log_section "Docker network"
+ensure_docker_network novasafe-network
 
-if docker network inspect novasafe-network >/dev/null 2>&1; then
-    log_ok "Network 'novasafe-network' already exists"
-else
-    log_step "Creating shared network novasafe-network"
-    docker network create novasafe-network
-    log_ok "Network created"
-fi
-
-# ── 4. Clone deployment repo ────────────────────────────────────────────────
+# ── 4. Deployment git repo ──────────────────────────────────────────────────
 log_section "Deployment repository"
 
+ensure_directory "$(dirname "${REPO_ROOT}")"
+
 if [ -d "${REPO_ROOT}/.git" ]; then
-    log_ok "Git repo already cloned at ${REPO_ROOT}"
-    log_step "Pulling latest changes"
+    log_ok "Git repo exists at ${REPO_ROOT}"
+    log_step "Pulling latest"
     cd "${REPO_ROOT}"
-    git fetch origin -q
-    git pull origin master 2>/dev/null || git pull origin main 2>/dev/null || true
-    log_ok "Repository up to date"
+    git fetch origin -q 2>/dev/null || log_warn "git fetch failed — using local copy"
+    git pull origin master 2>/dev/null || git pull origin main 2>/dev/null || log_warn "git pull failed — using local copy"
+elif [ -d "${REPO_ROOT}" ]; then
+    log_warn "${REPO_ROOT} exists but is not a git repo — renaming and re-cloning"
+    mv "${REPO_ROOT}" "${REPO_ROOT}.bak.$(date +%s)" 2>/dev/null || true
+    git clone "${REPO_URL}" "${REPO_ROOT}" || { log_error "git clone failed"; exit 1; }
 else
     log_step "Cloning novasafe-deployment"
-    mkdir -p "$(dirname "${REPO_ROOT}")"
-    log_cmd "git clone ${REPO_URL} ${REPO_ROOT}"
-    git clone "${REPO_URL}" "${REPO_ROOT}"
+    git clone "${REPO_URL}" "${REPO_ROOT}" || { log_error "git clone failed"; exit 1; }
     log_ok "Repository cloned"
 fi
 
-# ── 5. Sync live config ───────────────────────────────────────────────────────
+if [ ! -d "${REPO_ROOT}/opt/novasafe-deployment" ]; then
+    log_error "Expected path missing: ${REPO_ROOT}/opt/novasafe-deployment"
+    exit 1
+fi
+
+# ── 5. Sync live config (never overwrites .env) ─────────────────────────────
 log_section "Sync config to live path"
 
-mkdir -p "${BASE_DIR}"
-log_step "Rsync opt/novasafe-deployment → ${BASE_DIR}"
+ensure_directory "${BASE_DIR}"
+log_step "Rsync → ${BASE_DIR}"
 rsync -a \
     --exclude '.env' \
     --exclude '.env.*' \
@@ -100,15 +124,22 @@ rsync -a \
     --exclude '**/.env.*' \
     --exclude 'logs/' \
     --exclude '**/logs/' \
+    --exclude '.novasafe-initial-setup-done' \
+    --exclude '.novasafe-first-boot-done' \
     "${REPO_ROOT}/opt/novasafe-deployment/" "${BASE_DIR}/"
 
-chmod +x "${BASE_DIR}/deploy.sh" 2>/dev/null || true
-chmod +x "${BASE_DIR}/scripts/"*.sh 2>/dev/null || true
-chmod +x "${BASE_DIR}/scripts/lib/"*.sh 2>/dev/null || true
+ensure_file_executable "${BASE_DIR}/deploy.sh"
+for f in "${BASE_DIR}/scripts/"*.sh "${BASE_DIR}/scripts/lib/"*.sh; do
+    ensure_file_executable "$f"
+done
 
 log_ok "Config synced"
 
-# ── 6. Verify layout ──────────────────────────────────────────────────────────
+# ── 6. Required directories ─────────────────────────────────────────────────
+ensure_directory "${BASE_DIR}/mobile-api/logs"
+ensure_directory "${BASE_DIR}/infra/nginx/cloudflare"
+
+# ── 7. Verify layout ────────────────────────────────────────────────────────
 log_section "Verification"
 
 REQUIRED_PATHS=(
@@ -133,12 +164,10 @@ if [ "$ALL_OK" = false ]; then
     exit 1
 fi
 
-mkdir -p "${BASE_DIR}/mobile-api/logs"
-touch "${MARKER_FILE}"
 date -u '+%Y-%m-%d %H:%M:%S UTC' > "${MARKER_FILE}"
 
 log_section "Initial setup complete"
-log_ok "Server is ready for deploy.sh and first-boot"
-log_info "Next: copy .env files to platform/app, platform/auth, platform/backend, mobile-api"
-log_info "Next: ensure Cloudflare origin certs are in infra/nginx/cloudflare/"
+log_ok "Server ready for deploy.sh"
+log_info "Copy .env files to platform/app, platform/auth, platform/backend, mobile-api when ready"
+log_info "Place Cloudflare origin certs in infra/nginx/cloudflare/ if not already there"
 log_divider
