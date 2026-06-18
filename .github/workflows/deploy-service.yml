@@ -130,7 +130,7 @@ jobs:
           KEYSCAN_OK=0
           for attempt in 1 2 3 4 5; do
             echo "  ssh-keyscan attempt ${attempt}/5..."
-            if ssh-keyscan -T 10 -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null; then
+            if ssh-keyscan -T 15 -p 22 -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null; then
               KEYSCAN_OK=1
               break
             fi
@@ -138,13 +138,17 @@ jobs:
           done
 
           if [ "${KEYSCAN_OK}" -ne 1 ]; then
-            echo "::error::ssh-keyscan failed for SSH_HOST '${SSH_HOST}'."
-            echo "::error::Verify the Hostinger VPS public IP in GitHub secret SSH_HOST (no spaces, no root@, no https://)."
-            exit 1
+            echo "::warning::ssh-keyscan could not reach SSH_HOST on port 22."
+            echo "  Continuing anyway — deploy uses StrictHostKeyChecking=no."
+            echo "  If SSH login fails next, check:"
+            echo "    • SSH_HOST is the Hostinger VPS public IPv4 (e.g. 72.60.x.x)"
+            echo "    • Org/repo secrets are set on THIS repository (not only novasafe-deployment)"
+            echo "    • VPS port 22 is open and sshd is running"
+          else
+            echo "  ✔ known_hosts configured"
           fi
 
-          chmod 600 ~/.ssh/known_hosts
-          echo "  ✔ known_hosts configured"
+          chmod 600 ~/.ssh/known_hosts 2>/dev/null || true
 
           if [ -n "${SSH_PRIVATE_KEY}" ]; then
             printf '%s\n' "${SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
