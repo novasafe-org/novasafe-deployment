@@ -4,7 +4,12 @@
 </p>
 
 ---
+### Sync Status
 
+[![Deploy Changed Services](https://github.com/novasafe-org/novasafe-deployment/actions/workflows/deploy-on-change.yml/badge.svg)](https://github.com/novasafe-org/novasafe-deployment/actions/workflows/deploy-on-change.yml)
+
+
+---
 ## What is this?
 
 App code lives in other repos. **This repo** holds everything the server needs: `docker-compose`, nginx, and `deploy.sh`.
@@ -29,7 +34,9 @@ Deployment push  →  redeploy only changed services
 | `SSH_PASSWORD` | Root password |
 | `DEPLOY_PATH` | `/opt/novasafe-deployment` |
 
-> **Important:** Org secrets must be accessible by **`novasafe-deployment`** and every app repo — not just landing/app. If you used "Selected repositories", add `novasafe-deployment` to the list.
+> **Important:** Org secrets must be accessible by **`novasafe-deployment`** and every app repo — not just landing/app. If other repos deploy fine but `novasafe-deployment` fails, open **novasafe-deployment → Settings → Secrets → Actions** and delete any **repository-level** `SSH_*` secrets (they override org secrets). Especially remove a bad `SSH_PRIVATE_KEY` if you use password auth.
+
+> **SSH_HOST** must be your static VPS IP only, e.g. `69.62.74.79` — no `http://`, no `root@`.
 
 ### 2. Enable reusable workflows (one-time org/repo setting)
 
