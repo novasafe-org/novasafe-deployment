@@ -326,6 +326,9 @@ deploy_nginx() {
         was_running=true
     fi
 
+    # Legacy path was glob-included at http{} scope — remove after move to snippets/
+    rm -f "${NGINX_DIR}/conf.d/internal-docker.allowed_ips.conf"
+
     if ! nginx_certs_present; then
         log_warn "Cloudflare origin certs missing in ${NGINX_DIR}/cloudflare/"
         log_warn "Place origin.crt (or origin.pem) and origin.key before HTTPS works"
@@ -358,6 +361,22 @@ deploy_nginx() {
             log_warn "nginx config test skipped or deferred — run ./deploy.sh nginx-reload after all services are up"
         fi
     fi
+}
+
+deploy_portainer() {
+    ensure_docker_network novasafe-network
+    deploy_compose_dir "${PORTAINER_DIR}" "portainer" false
+    connect_network_if_needed novasafe-network portainer
+
+    log_step "Waiting for portainer container to stabilize"
+    if ! wait_for_container_stable "portainer" 30; then
+        log_error "portainer is crash-looping"
+        log_info "Common causes: docker.sock permissions, corrupt volume, or wrong image arch"
+        log_info "Try: docker logs portainer"
+        log_info "Reset data (last resort): docker compose -f ${PORTAINER_DIR}/docker-compose.yml down -v"
+        return 1
+    fi
+    log_ok "portainer container is running"
 }
 
 deploy_mobile_api() {
@@ -421,7 +440,7 @@ run_service_deploy() {
         app)            deploy_compose_dir "${APP_DIR}" "novasafe-app" true ;;
         mobile-api)     deploy_mobile_api ;;
         nginx)          deploy_nginx ;;
-        portainer)      deploy_compose_dir "${PORTAINER_DIR}" "portainer" false ;;
+        portainer)      deploy_portainer ;;
         *)
             log_error "Unknown service: ${target}"
             exit 1
@@ -468,6 +487,8 @@ deploy_all_services() {
 
         if [ "${container}" = "novasafe-mobile-vault" ]; then
             deploy_mobile_api && deployed=$((deployed + 1)) || log_warn "${container} deploy had issues"
+        elif [ "${container}" = "portainer" ]; then
+            deploy_portainer && deployed=$((deployed + 1)) || log_warn "${container} deploy had issues"
         else
             deploy_compose_dir "${dir}" "${container}" "${needs_env}" "skip" && deployed=$((deployed + 1)) || true
         fi

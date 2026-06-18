@@ -56,7 +56,7 @@ Workflows must exist on GitHub **before** app repos can call them.
 |---|---|
 | App / Auth / Mobile API `.env` | `platform/*/` and `mobile-api/` |
 | Cloudflare origin cert/key | `infra/nginx/cloudflare/` |
-| Portainer IP allowlist | `infra/nginx/conf.d/internal-docker.allowed_ips.conf` (edit in repo, syncs on deploy) |
+| Portainer IP allowlist | `infra/nginx/conf.d/snippets/internal-docker.allowed_ips.conf` (edit in repo, syncs on deploy) |
 
 ### 5. Push any app repo
 
