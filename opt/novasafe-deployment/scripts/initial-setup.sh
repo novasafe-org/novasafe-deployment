@@ -168,6 +168,6 @@ date -u '+%Y-%m-%d %H:%M:%S UTC' > "${MARKER_FILE}"
 
 log_section "Initial setup complete"
 log_ok "Server ready for deploy.sh"
-log_info "Copy .env files to platform/app, platform/auth, platform/backend, mobile-api when ready"
+log_info "Copy .env files to platform/app, platform/auth, mobile-api when ready"
 log_info "Place Cloudflare origin certs in infra/nginx/cloudflare/ if not already there"
 log_divider

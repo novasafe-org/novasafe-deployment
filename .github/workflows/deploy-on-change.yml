@@ -41,8 +41,6 @@ jobs:
               - 'opt/novasafe-deployment/platform/auth/**'
             app:
               - 'opt/novasafe-deployment/platform/app/**'
-            backend:
-              - 'opt/novasafe-deployment/platform/backend/**'
             mobile-api:
               - 'opt/novasafe-deployment/mobile-api/**'
             nginx:
