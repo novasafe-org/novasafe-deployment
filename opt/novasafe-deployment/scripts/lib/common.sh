@@ -109,6 +109,30 @@ container_is_running() {
     docker ps --format '{{.Names}}' | grep -Fxq "${name}"
 }
 
+container_is_stable() {
+    local name="$1"
+    local status restarting
+
+    status=$(docker inspect --format='{{.State.Status}}' "${name}" 2>/dev/null || echo missing)
+    restarting=$(docker inspect --format='{{.State.Restarting}}' "${name}" 2>/dev/null || echo true)
+
+    [ "${status}" = "running" ] && [ "${restarting}" = "false" ]
+}
+
+wait_for_container_stable() {
+    local name="$1"
+    local max_wait="${2:-30}"
+    local i
+
+    for i in $(seq 1 "${max_wait}"); do
+        if container_is_stable "${name}"; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
+}
+
 container_exists() {
     local name="$1"
     docker ps -a --format '{{.Names}}' | grep -Fxq "${name}"

@@ -57,6 +57,20 @@ else
     container_is_running() {
         docker ps --format '{{.Names}}' | grep -Fxq "$1"
     }
+    container_is_stable() {
+        local status restarting
+        status=$(docker inspect --format='{{.State.Status}}' "$1" 2>/dev/null || echo missing)
+        restarting=$(docker inspect --format='{{.State.Restarting}}' "$1" 2>/dev/null || echo true)
+        [ "${status}" = "running" ] && [ "${restarting}" = "false" ]
+    }
+    wait_for_container_stable() {
+        local i
+        for i in $(seq 1 "${2:-30}"); do
+            container_is_stable "$1" && return 0
+            sleep 1
+        done
+        return 1
+    }
     env_file_present() { [ -f "${1}/.env" ]; }
     ensure_directory() { mkdir -p "$1"; }
     ensure_file_executable() { [ -f "$1" ] && chmod +x "$1" 2>/dev/null || true; }
@@ -320,18 +334,29 @@ deploy_nginx() {
 
     deploy_compose_dir "${NGINX_DIR}" "novasafe-nginx" false
 
+    log_step "Waiting for nginx container to stabilize"
+    if ! wait_for_container_stable "novasafe-nginx" 30; then
+        log_error "nginx is crash-looping — likely bad config or missing TLS files"
+        log_step "Recent nginx logs"
+        docker logs --tail 60 novasafe-nginx 2>/dev/null || true
+        if [ "${NOVASAFE_IN_FIRST_BOOT:-}" = "true" ]; then
+            log_warn "Continuing first boot — fix nginx config/certs and redeploy nginx"
+            return 0
+        fi
+        return 1
+    fi
+    log_ok "nginx container is running"
+
     # Fresh `up -d` already starts nginx with the synced config — reload is redundant
-    # and often fails when upstream containers (landing, auth, app) are not up yet.
+    # on first boot when upstream app containers may not exist yet.
     if [ "${was_running}" = "true" ]; then
         reload_nginx_if_running false
     else
         log_info "Fresh nginx container — skipping reload"
-        sleep 2
         if wait_for_nginx_exec && docker exec novasafe-nginx nginx -t >/dev/null 2>&1; then
             log_ok "nginx config valid"
         else
-            log_warn "nginx config not fully valid yet — normal during first boot before app containers start"
-            log_warn "Run ./deploy.sh nginx-reload after all services are deployed"
+            log_warn "nginx config test skipped or deferred — run ./deploy.sh nginx-reload after all services are up"
         fi
     fi
 }
