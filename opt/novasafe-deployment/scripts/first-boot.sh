@@ -89,12 +89,17 @@ for entry in "${BOOT_SEQUENCE[@]}"; do
          GHCR_TOKEN="${GHCR_TOKEN:-}" \
          GHCR_USER="${GHCR_USER:-}" \
          bash "${DEPLOY_SH}" "${service}"; then
-        log_error "Failed: ${service}"
-        FAILED=$((FAILED + 1))
-        if [ "$service" = "nginx" ]; then
-            exit 1
+        if [ "${service}" = "nginx" ] && container_is_running "novasafe-nginx"; then
+            log_warn "nginx deploy reported issues but container is running — continuing first boot"
+            log_info "Run ./deploy.sh nginx-reload after all services are up"
+        else
+            log_error "Failed: ${service}"
+            FAILED=$((FAILED + 1))
+            if [ "${service}" = "nginx" ]; then
+                exit 1
+            fi
+            continue
         fi
-        continue
     fi
 
     log_ok "${service} ready"
@@ -106,6 +111,15 @@ log_summary_row "Started/updated" "$STARTED"
 log_summary_row "Already running" "$ALREADY"
 log_summary_row "Skipped" "$SKIPPED"
 log_summary_row "Failed" "$FAILED"
+
+if container_is_running "novasafe-nginx"; then
+    log_step "Reloading nginx after boot sequence"
+    NOVASAFE_DEPLOY_PATH="${BASE_DIR}" \
+    NOVASAFE_SKIP_SYNC=true \
+    NOVASAFE_IN_FIRST_BOOT=true \
+    bash "${DEPLOY_SH}" nginx-reload 2>/dev/null || \
+        log_warn "nginx-reload deferred — run ./deploy.sh nginx-reload when all upstreams are ready"
+fi
 
 date -u '+%Y-%m-%d %H:%M:%S UTC' > "${MARKER_FILE}"
 

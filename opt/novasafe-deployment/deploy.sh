@@ -256,28 +256,84 @@ deploy_compose_dir() {
 
 nginx_certs_present() {
     local cert_dir="${NGINX_DIR}/cloudflare"
-    [ -f "${cert_dir}/origin.pem" ] && [ -f "${cert_dir}/origin.key" ]
+    [ -f "${cert_dir}/origin.key" ] \
+        && { [ -f "${cert_dir}/origin.crt" ] || [ -f "${cert_dir}/origin.pem" ]; }
+}
+
+wait_for_nginx_exec() {
+    local i
+    for i in $(seq 1 15); do
+        if docker exec novasafe-nginx nginx -v >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 1
+    done
+    return 1
 }
 
 reload_nginx_if_running() {
+    local strict="${1:-false}"
+
     if ! container_is_running "novasafe-nginx"; then
         log_warn "novasafe-nginx not running — skipping reload"
         return 0
     fi
-    log_step "Validating and reloading nginx"
-    docker exec novasafe-nginx nginx -t
-    docker exec novasafe-nginx nginx -s reload
-    log_ok "Nginx reloaded"
+
+    if ! wait_for_nginx_exec; then
+        log_warn "nginx not ready for exec yet — skipping reload"
+        return 0
+    fi
+
+    log_step "Validating nginx configuration"
+    local test_output=""
+    if ! test_output=$(docker exec novasafe-nginx nginx -t 2>&1); then
+        log_warn "nginx -t failed:"
+        while IFS= read -r line; do
+            [ -n "${line}" ] && log_info "  ${line}"
+        done <<< "${test_output}"
+
+        if [ "${strict}" = "true" ]; then
+            return 1
+        fi
+        log_warn "Skipping reload — run ./deploy.sh nginx-reload after certs/upstreams are ready"
+        return 0
+    fi
+    log_ok "nginx config valid"
+
+    if docker exec novasafe-nginx nginx -s reload 2>/dev/null; then
+        log_ok "Nginx reloaded"
+    else
+        log_warn "nginx reload failed — container may already be serving the latest config"
+    fi
 }
 
 deploy_nginx() {
+    local was_running=false
+    if container_is_running "novasafe-nginx"; then
+        was_running=true
+    fi
+
     if ! nginx_certs_present; then
         log_warn "Cloudflare origin certs missing in ${NGINX_DIR}/cloudflare/"
-        log_warn "Place origin.pem and origin.key before nginx can serve HTTPS"
+        log_warn "Place origin.crt (or origin.pem) and origin.key before HTTPS works"
     fi
 
     deploy_compose_dir "${NGINX_DIR}" "novasafe-nginx" false
-    reload_nginx_if_running
+
+    # Fresh `up -d` already starts nginx with the synced config — reload is redundant
+    # and often fails when upstream containers (landing, auth, app) are not up yet.
+    if [ "${was_running}" = "true" ]; then
+        reload_nginx_if_running false
+    else
+        log_info "Fresh nginx container — skipping reload"
+        sleep 2
+        if wait_for_nginx_exec && docker exec novasafe-nginx nginx -t >/dev/null 2>&1; then
+            log_ok "nginx config valid"
+        else
+            log_warn "nginx config not fully valid yet — normal during first boot before app containers start"
+            log_warn "Run ./deploy.sh nginx-reload after all services are deployed"
+        fi
+    fi
 }
 
 deploy_mobile_api() {
@@ -320,9 +376,7 @@ nginx_reload() {
         log_error "novasafe-nginx is not running"
         exit 1
     fi
-    docker exec novasafe-nginx nginx -t
-    docker exec novasafe-nginx nginx -s reload
-    log_ok "Nginx reloaded"
+    reload_nginx_if_running true
 }
 
 run_service_deploy() {
