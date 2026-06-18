@@ -86,6 +86,7 @@ jobs:
           SSH_HOST="$(trim "${SSH_HOST}")"
           DEPLOY_PATH="$(trim "${DEPLOY_PATH}")"
           DEPLOY_REPO_PATH="$(trim "${DEPLOY_REPO_PATH:-/opt/novasafe-deployment-repo}")"
+          SSH_PRIVATE_KEY="$(trim "${SSH_PRIVATE_KEY:-}")"
 
           # Strip accidental user@ or protocol prefixes from SSH_HOST
           SSH_HOST="${SSH_HOST#*@}"
@@ -103,6 +104,14 @@ jobs:
             exit 1
           fi
 
+          USE_SSH_KEY=false
+          if printf '%s' "${SSH_PRIVATE_KEY}" | grep -q 'BEGIN.*PRIVATE KEY'; then
+            USE_SSH_KEY=true
+          elif [ -n "${SSH_PRIVATE_KEY}" ]; then
+            echo "::warning::SSH_PRIVATE_KEY is set but not a valid PEM key — using SSH_PASSWORD instead."
+            echo "::warning::Delete the bad SSH_PRIVATE_KEY repo secret on novasafe-deployment if you only use password auth."
+          fi
+
           # SSH_HOST must be VPS IP (recommended) or a resolvable hostname
           if ! printf '%s' "${SSH_HOST}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
             echo "  ⚠ SSH_HOST is not an IPv4 address — using hostname (IP is recommended for Hostinger)"
@@ -115,45 +124,71 @@ jobs:
           echo "  ✔ SSH_USER     : ${SSH_USER}"
           echo "  ✔ SSH_HOST     : ${SSH_HOST}"
           echo "  ✔ DEPLOY_PATH  : ${DEPLOY_PATH}"
-          echo "  ✔ Auth method  : $([ -n "${SSH_PRIVATE_KEY}" ] && echo 'SSH key' || echo 'root password')"
+          echo "  ✔ Auth method  : $([ "${USE_SSH_KEY}" = true ] && echo 'SSH key' || echo 'root password')"
 
           echo "SSH_USER=${SSH_USER}" >> "${GITHUB_ENV}"
           echo "SSH_HOST=${SSH_HOST}" >> "${GITHUB_ENV}"
           echo "DEPLOY_PATH=${DEPLOY_PATH}" >> "${GITHUB_ENV}"
           echo "DEPLOY_REPO_PATH=${DEPLOY_REPO_PATH}" >> "${GITHUB_ENV}"
+          echo "USE_SSH_KEY=${USE_SSH_KEY}" >> "${GITHUB_ENV}"
 
-          echo "▶ Configuring SSH known_hosts..."
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          : > ~/.ssh/known_hosts
 
-          KEYSCAN_OK=0
-          for attempt in 1 2 3 4 5; do
-            echo "  ssh-keyscan attempt ${attempt}/5..."
-            if ssh-keyscan -T 15 -p 22 -H "${SSH_HOST}" >> ~/.ssh/known_hosts 2>/dev/null; then
-              KEYSCAN_OK=1
-              break
-            fi
-            sleep 3
-          done
-
-          if [ "${KEYSCAN_OK}" -ne 1 ]; then
-            echo "::warning::ssh-keyscan could not reach SSH_HOST on port 22."
-            echo "  Continuing anyway — deploy uses StrictHostKeyChecking=no."
-            echo "  If SSH login fails next, check:"
-            echo "    • SSH_HOST is the Hostinger VPS public IPv4 (e.g. 72.60.x.x)"
-            echo "    • Org/repo secrets are set on THIS repository (not only novasafe-deployment)"
-            echo "    • VPS port 22 is open and sshd is running"
-          else
-            echo "  ✔ known_hosts configured"
-          fi
-
-          chmod 600 ~/.ssh/known_hosts 2>/dev/null || true
-
-          if [ -n "${SSH_PRIVATE_KEY}" ]; then
+          if [ "${USE_SSH_KEY}" = true ]; then
             printf '%s\n' "${SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
             chmod 600 ~/.ssh/deploy_key
             echo "  ✔ Deploy key loaded"
+          fi
+
+      - name: Install sshpass
+        run: |
+          echo "▶ Installing sshpass for password-based SSH..."
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sshpass
+          echo "  ✔ sshpass ready"
+
+      - name: Test VPS SSH connectivity
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          run_remote() {
+            if [ "${USE_SSH_KEY}" = true ] && [ -f ~/.ssh/deploy_key ]; then
+              ssh -i ~/.ssh/deploy_key \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                -o ConnectTimeout=20 \
+                "${SSH_USER}@${SSH_HOST}" "$@"
+            else
+              sshpass -p "${SSH_PASSWORD}" ssh \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                -o ConnectTimeout=20 \
+                "${SSH_USER}@${SSH_HOST}" "$@"
+            fi
+          }
+
+          echo "▶ Testing TCP port 22 on ${SSH_HOST}..."
+          if timeout 15 bash -c "echo >/dev/tcp/${SSH_HOST}/22" 2>/dev/null; then
+            echo "  ✔ Port 22 is reachable from GitHub Actions"
+          else
+            echo "::error::Cannot reach ${SSH_HOST} on port 22 from GitHub Actions."
+            echo "::error::Your VPS IP is probably correct (static IP does not need changing)."
+            echo "::error::Fix Hostinger firewall / hPanel → Security → Firewall:"
+            echo "::error::  Allow inbound TCP 22 from anywhere (0.0.0.0/0) for CI deploys,"
+            echo "::error::  or GitHub Actions runners will be blocked (they use random cloud IPs)."
+            exit 1
+          fi
+
+          echo "▶ Testing SSH login..."
+          if run_remote "echo deploy-ssh-ok" | grep -q deploy-ssh-ok; then
+            echo "  ✔ SSH login successful — VPS is ready for deploy"
+          else
+            echo "::error::SSH login to ${SSH_USER}@${SSH_HOST} failed."
+            echo "::error::IP reachability is OK — check SSH_PASSWORD (or SSH_PRIVATE_KEY) in org/repo secrets."
+            exit 1
           fi
 
       - name: Checkout deployment config
@@ -162,13 +197,6 @@ jobs:
           repository: novasafe-org/novasafe-deployment
           ref: master
           path: deployment-config
-
-      - name: Install sshpass
-        run: |
-          echo "▶ Installing sshpass for password-based SSH..."
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq sshpass
-          echo "  ✔ sshpass ready"
 
       - name: Upload bootstrap scripts to VPS
         env:
@@ -194,18 +222,18 @@ jobs:
           run_scp() {
             local src="$1"
             local dest="$2"
-            if [ -f ~/.ssh/deploy_key ]; then
-              scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "$src" "${SSH_USER}@${SSH_HOST}:${dest}"
+            if [ "${USE_SSH_KEY}" = true ] && [ -f ~/.ssh/deploy_key ]; then
+              scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$src" "${SSH_USER}@${SSH_HOST}:${dest}"
             else
-              sshpass -p "${SSH_PASSWORD}" scp -o StrictHostKeyChecking=no "$src" "${SSH_USER}@${SSH_HOST}:${dest}"
+              sshpass -p "${SSH_PASSWORD}" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$src" "${SSH_USER}@${SSH_HOST}:${dest}"
             fi
           }
 
           run_remote() {
-            if [ -f ~/.ssh/deploy_key ]; then
-              ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "${SSH_USER}@${SSH_HOST}" "$@"
+            if [ "${USE_SSH_KEY}" = true ] && [ -f ~/.ssh/deploy_key ]; then
+              ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 "${SSH_USER}@${SSH_HOST}" "$@"
             else
-              sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no "${SSH_USER}@${SSH_HOST}" "$@"
+              sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 "${SSH_USER}@${SSH_HOST}" "$@"
             fi
           }
 
@@ -233,10 +261,10 @@ jobs:
           DEPLOY_REPO_PATH="${DEPLOY_REPO_PATH:-/opt/novasafe-deployment-repo}"
 
           run_remote() {
-            if [ -f ~/.ssh/deploy_key ]; then
-              ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no "${SSH_USER}@${SSH_HOST}" "$@"
+            if [ "${USE_SSH_KEY:-false}" = true ] && [ -f ~/.ssh/deploy_key ]; then
+              ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 "${SSH_USER}@${SSH_HOST}" "$@"
             else
-              sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no "${SSH_USER}@${SSH_HOST}" "$@"
+              sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 "${SSH_USER}@${SSH_HOST}" "$@"
             fi
           }
 

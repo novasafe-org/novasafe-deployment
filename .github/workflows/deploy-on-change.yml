@@ -67,23 +67,43 @@ jobs:
 
       - name: Validate deploy secrets
         run: |
+          set -euo pipefail
+          trim() { printf '%s' "$1" | tr -d '[:space:]'; }
+
           missing=0
           for name in SSH_USER SSH_HOST SSH_PASSWORD DEPLOY_PATH; do
-            if [ -z "${!name:-}" ]; then
+            val="$(trim "${!name:-}")"
+            if [ -z "${val}" ]; then
               echo "::error::Missing secret: ${name}"
               missing=1
             fi
           done
           if [ "$missing" -eq 1 ]; then
-            echo "::error::Add org secrets with access to novasafe-deployment, or add repo secrets on novasafe-deployment."
+            echo "::error::Add org secrets with access to novasafe-deployment."
+            echo "::error::If other repos work but this one fails, check novasafe-deployment → Settings → Secrets"
+            echo "::error::for REPO-LEVEL secrets that override org (especially SSH_PRIVATE_KEY or wrong SSH_HOST)."
             exit 1
           fi
-          echo "  OK All required deploy secrets are set"
+
+          SSH_HOST="$(trim "${SSH_HOST}")"
+          if ! printf '%s' "${SSH_HOST}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::warning::SSH_HOST is not IPv4 on novasafe-deployment — expected e.g. 69.62.74.79"
+          else
+            echo "  OK SSH_HOST looks like a valid IPv4 address"
+          fi
+
+          if [ -n "${SSH_PRIVATE_KEY:-}" ] && ! printf '%s' "${SSH_PRIVATE_KEY}" | grep -q 'BEGIN.*PRIVATE KEY'; then
+            echo "::warning::SSH_PRIVATE_KEY is set on novasafe-deployment but is not a valid PEM key."
+            echo "::warning::Delete it from repo secrets if you use password auth (other repos may not have this secret)."
+          fi
+
+          echo "  OK All required deploy secrets are set on novasafe-deployment"
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
   deploy:
     needs: detect
