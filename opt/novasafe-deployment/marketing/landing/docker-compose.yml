@@ -20,6 +20,8 @@ services:
   landing:
     image: ghcr.io/novasafe-org/novasafe-landing-v2:latest
     container_name: novasafe-landing
+    mem_limit: 128m
+    memswap_limit: 128m
 
     env_file:
       - path: .env

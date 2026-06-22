@@ -30,6 +30,10 @@ services:
       NODE_ENV: production
       PORT: "3101"
       HOSTNAME: 0.0.0.0
+      NODE_OPTIONS: "--max-old-space-size=320"
+
+    mem_limit: 384m
+    memswap_limit: 384m
 
     ports:
       - "127.0.0.1:3101:3101"

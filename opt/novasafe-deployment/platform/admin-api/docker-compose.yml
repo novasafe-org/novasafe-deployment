@@ -15,12 +15,16 @@ services:
       ADMIN_PORT: "3130"
       PORT: "3130"
       NODE_ENV: production
+      # Cap Node heap — prevents one container from consuming all VPS RAM
+      NODE_OPTIONS: "--max-old-space-size=320"
       LOG_ENABLE_CONSOLE: "false"
       LOG_ENABLE_FILE: "true"
       LOG_FILE_MODE: single
       LOG_DIR: /app/logs
       LOG_JSON_FORMAT: "true"
       MEDIA_STORAGE_PATH: /app/uploads
+    mem_limit: 384m
+    memswap_limit: 384m
     ports:
       - "127.0.0.1:8086:3130"
     volumes:
@@ -35,6 +39,11 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   novasafe-network:
