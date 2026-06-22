@@ -15,7 +15,7 @@ name: Deploy Service
 on:
   workflow_call:
     inputs:
-        service:
+      service:
         description: Service key (landing, auth, app, mobile-landing, mobile-api, admin-api, nginx, portainer, sync)
         required: true
         type: string
