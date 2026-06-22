@@ -23,6 +23,7 @@ MOBILE_LANDING_DIR="$BASE_DIR/marketing/mobile-landing"
 AUTH_DIR="$BASE_DIR/platform/auth"
 APP_DIR="$BASE_DIR/platform/app"
 MOBILE_API_DIR="$BASE_DIR/mobile-api"
+ADMIN_API_DIR="$BASE_DIR/platform/admin-api"
 NGINX_DIR="$BASE_DIR/infra/nginx"
 PORTAINER_DIR="$BASE_DIR/infra/portainer"
 
@@ -414,6 +415,41 @@ deploy_mobile_api() {
     reload_nginx_if_running
 }
 
+deploy_admin_api() {
+    deploy_compose_dir "${ADMIN_API_DIR}" "novasafe-admin-api" true
+
+    ensure_docker_network novasafe-network
+    connect_network_if_needed novasafe-network novasafe-nginx
+    connect_network_if_needed novasafe-network novasafe-admin-api
+
+    if ! container_is_running "novasafe-admin-api"; then
+        log_warn "novasafe-admin-api not running — skipping health wait"
+        return 0
+    fi
+
+    log_step "Waiting for health (up to 90s)"
+    for i in $(seq 1 18); do
+        STATUS=$(docker inspect --format='{{.State.Health.Status}}' novasafe-admin-api 2>/dev/null || echo "unknown")
+        log_info "Health check ${i}/18 — status: ${STATUS}"
+        if [ "${STATUS}" = "healthy" ]; then
+            log_ok "Container is healthy"
+            break
+        fi
+        if [ "${STATUS}" = "none" ] || [ "${STATUS}" = "unknown" ]; then
+            log_info "No healthcheck defined — treating as ready"
+            break
+        fi
+        if [ "${i}" -eq 18 ]; then
+            log_error "Health check did not pass (status=${STATUS})"
+            docker logs --tail 80 novasafe-admin-api || true
+            exit 1
+        fi
+        sleep 5
+    done
+
+    reload_nginx_if_running
+}
+
 nginx_reload() {
     if ! container_is_running "novasafe-nginx"; then
         log_error "novasafe-nginx is not running"
@@ -439,6 +475,7 @@ run_service_deploy() {
         auth)           deploy_compose_dir "${AUTH_DIR}" "novasafe-auth" true ;;
         app)            deploy_compose_dir "${APP_DIR}" "novasafe-app" true ;;
         mobile-api)     deploy_mobile_api ;;
+        admin-api)      deploy_admin_api ;;
         nginx)          deploy_nginx ;;
         portainer)      deploy_portainer ;;
         *)
@@ -465,6 +502,7 @@ deploy_all_services() {
 
     for entry in \
         "${MOBILE_API_DIR}:novasafe-mobile-vault:true" \
+        "${ADMIN_API_DIR}:novasafe-admin-api:true" \
         "${AUTH_DIR}:novasafe-auth:true" \
         "${APP_DIR}:novasafe-app:true" \
         "${LANDING_DIR}:novasafe-landing:false" \
@@ -487,6 +525,8 @@ deploy_all_services() {
 
         if [ "${container}" = "novasafe-mobile-vault" ]; then
             deploy_mobile_api && deployed=$((deployed + 1)) || log_warn "${container} deploy had issues"
+        elif [ "${container}" = "novasafe-admin-api" ]; then
+            deploy_admin_api && deployed=$((deployed + 1)) || log_warn "${container} deploy had issues"
         elif [ "${container}" = "portainer" ]; then
             deploy_portainer && deployed=$((deployed + 1)) || log_warn "${container} deploy had issues"
         else
@@ -511,7 +551,7 @@ sync)
     sync_config
     ;;
 
-landing|mobile-landing|auth|app|mobile-api|nginx|portainer)
+landing|mobile-landing|auth|app|mobile-api|admin-api|nginx|portainer)
     if [ "${NOVASAFE_SKIP_SYNC:-}" != "true" ]; then
         sync_config
     fi
