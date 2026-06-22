@@ -15,6 +15,7 @@ services:
     environment:
       CORE_PORT: "3124"
       PORT: "3124"
+      NODE_OPTIONS: "--max-old-space-size=640"
       # Override server .env — production: file logs only, no stdout noise
       NODE_ENV: production
       LOG_ENABLE_CONSOLE: "false"
@@ -26,6 +27,8 @@ services:
       LOG_PRETTY_PRINT: "false"
       LOG_ENABLE_REQUEST: "true"
       LOG_ENABLE_ERROR_STACK: "true"
+    mem_limit: 768m
+    memswap_limit: 768m
     ports:
       - "127.0.0.1:8085:3124"
     volumes:
@@ -39,6 +42,11 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   novasafe-network:
