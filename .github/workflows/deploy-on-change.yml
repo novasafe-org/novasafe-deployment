@@ -43,6 +43,8 @@ jobs:
               - 'opt/novasafe-deployment/platform/app/**'
             mobile-api:
               - 'opt/novasafe-deployment/mobile-api/**'
+            admin-api:
+              - 'opt/novasafe-deployment/platform/admin-api/**'
             nginx:
               - 'opt/novasafe-deployment/infra/nginx/**'
             portainer:
