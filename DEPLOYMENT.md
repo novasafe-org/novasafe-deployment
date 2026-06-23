@@ -62,8 +62,7 @@ novasafe-deployment/
 │   │   └── mobile-landing/
 │   ├── mobile-api/
 │   └── infra/
-│       ├── nginx/
-│       └── portainer/
+│       └── nginx/
 ├── DEPLOYMENT.md               ← this file
 └── README.md                   ← short overview
 ```
@@ -226,7 +225,6 @@ Path → service mapping:
 | `platform/backend/**` | `backend` |
 | `mobile-api/**` | `mobile-api` |
 | `infra/nginx/**` | `nginx` |
-| `infra/portainer/**` | `portainer` |
 | `deploy.sh` | `sync` |
 
 ### Flow C — Fresh VPS (first ever deploy)
@@ -279,7 +277,7 @@ sequenceDiagram
 
 | Input | Default | Description |
 |---|---|---|
-| `service` | required | `landing`, `auth`, `app`, `backend`, `mobile-landing`, `mobile-api`, `nginx`, `portainer`, `sync` |
+| `service` | required | `landing`, `auth`, `app`, `backend`, `mobile-landing`, `mobile-api`, `admin-api`, `nginx`, `sync` |
 | `sync_config` | `true` | Git pull + rsync before deploy |
 | `caller_repo` | — | Shown in logs (which repo triggered) |
 | `caller_ref` | — | Branch@sha shown in logs |
@@ -384,7 +382,7 @@ Idempotent fresh-server setup:
 One-time stack start (order matters):
 
 ```
-nginx → backend → mobile-api → auth → app → landing → mobile-landing → portainer
+nginx → backend → mobile-api → admin-api → auth → app → landing → mobile-landing
 ```
 
 - Services requiring `.env` are **skipped** if file is missing
@@ -408,7 +406,7 @@ Colored, structured logs used by all scripts. Set `NS_LOG_COLOR=no` to disable.
 | `mobile-api` | `novasafe-mobile-vault` | `novasafe-mobile-vault:latest` | 3124 | Yes | mobile-api.novasafe.io |
 | `mobile-landing` | `mobile-landing` | `novasafe-app-landing-page:latest` | — | No | (per nginx conf) |
 | `nginx` | `novasafe-nginx` | `nginx:alpine` | 80, 443 | No | all domains |
-| `portainer` | `portainer` | `portainer/portainer-ce` | internal | No | internal-docker.novasafe.io |
+| `admin-api` | `novasafe-admin-api` | `novasafe-admin-api:latest` | 3130 | Yes | admin-api.novasafe.io |
 
 **Port plan:** landing 3100, auth 3101, app 3102, mobile-api 3124.  
 Upstream ports bind to `127.0.0.1` on the host; public nginx reaches containers via Docker DNS on `novasafe-network`.

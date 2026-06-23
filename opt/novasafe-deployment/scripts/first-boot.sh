@@ -34,7 +34,6 @@ BOOT_SEQUENCE=(
     "app:true:novasafe-app"
     "landing:false:novasafe-landing"
     "mobile-landing:false:mobile-landing"
-    "portainer:false:portainer"
 )
 
 log_section "Boot sequence"
@@ -59,7 +58,6 @@ for entry in "${BOOT_SEQUENCE[@]}"; do
         app)            service_dir="${BASE_DIR}/platform/app" ;;
         landing)        service_dir="${BASE_DIR}/marketing/landing" ;;
         mobile-landing) service_dir="${BASE_DIR}/marketing/mobile-landing" ;;
-        portainer)      service_dir="${BASE_DIR}/infra/portainer" ;;
     esac
 
     if [ ! -f "${service_dir}/docker-compose.yml" ]; then

@@ -16,7 +16,6 @@ services:
       - auth
       - app
       - backend
-      - portainer
     restart: unless-stopped
 
   # Marketing site - novasafe.io (SEO, no auth). Built by novasafe-landing repo workflow.
@@ -80,18 +79,3 @@ services:
       retries: 3
       start_period: 40s
     restart: unless-stopped
-
-  # Portainer - container monitoring/management. Exposed only via nginx at internal-docker.novasafe.io (IP-restricted).
-  portainer:
-    image: portainer/portainer-ce:latest
-    pull_policy: always
-    container_name: portainer
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - portainer_data:/data
-    expose:
-      - "9000"
-    restart: unless-stopped
-
-volumes:
-  portainer_data:

@@ -1,6 +1,6 @@
 # VPS capacity & troubleshooting (4 GB Hostinger)
 
-Your Hostinger VPS runs **7 Docker stacks**. On 4 GB RAM that is tight — CPU/RAM spikes to ~100% usually mean the Linux **OOM killer** stopped a container (often `novasafe-admin-api`).
+Your Hostinger VPS runs **6 Docker stacks** (nginx + mobile-api + admin-api + auth + app + landing). On 4 GB RAM that is tight — CPU/RAM spikes to ~100% usually mean the Linux **OOM killer** stopped a container (often `novasafe-admin-api`).
 
 ## Why the blog page fails
 
@@ -61,20 +61,17 @@ Without this, blog proxy points at the wrong host even if admin-api is up.
 
 `docker-compose.yml` files now set `mem_limit` + `NODE_OPTIONS=--max-old-space-size=…` to cap Node heaps.
 
-**Keep Portainer stopped** unless you are actively debugging — it uses ~200–400 MB.
-
 ---
 
 ## Reduce load on 4 GB
 
 ### Short term (free)
 
-1. **Stop Portainer** when not in use (already stopped in your screenshot — good).
-2. **Restart admin-api** after deploy (see above).
-3. **Redeploy** with updated compose files (memory limits):  
+1. **Restart admin-api** after deploy (see above).
+2. **Redeploy** with updated compose files (memory limits):
    `./deploy.sh admin-api` and `./deploy.sh mobile-api`
-4. **Reload nginx** after mobile-api CORS fix: `./deploy.sh nginx`
-5. **Trim Docker** periodically:
+3. **Reload nginx** after mobile-api CORS fix: `./deploy.sh nginx`
+4. **Trim Docker** periodically:
    ```bash
    docker system prune -f
    docker image prune -a -f   # only when safe — re-pulls on next deploy
