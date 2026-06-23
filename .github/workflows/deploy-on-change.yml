@@ -47,8 +47,6 @@ jobs:
               - 'opt/novasafe-deployment/platform/admin-api/**'
             nginx:
               - 'opt/novasafe-deployment/infra/nginx/**'
-            portainer:
-              - 'opt/novasafe-deployment/infra/portainer/**'
             sync:
               - 'opt/novasafe-deployment/deploy.sh'
               - '.github/workflows/deploy-service.yml'
