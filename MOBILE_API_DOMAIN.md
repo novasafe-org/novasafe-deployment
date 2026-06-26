@@ -18,6 +18,7 @@ Examples:
 
 ```text
 Mobile app  →  https://mobile-api.novasafe.io  →  nginx  →  novasafe-mobile-vault:3124
+                                                              (image = services/core)
 ```
 
 | Path on server | Role |
@@ -64,6 +65,12 @@ VITE_MOBILE_VAULT_API_URL=https://mobile-api.novasafe.io
 ## Verify
 
 ```bash
+# From novasafe-backend repo:
+./scripts/smoke-mobile-api.sh
+
 curl -sS https://mobile-api.novasafe.io/mobile/health
+curl -sS https://mobile-api.novasafe.io/version
 curl -sS http://127.0.0.1:8085/mobile/health   # localhost debug bind only
 ```
+
+Expect `"service":"core"` in health JSON. See `novasafe-backend/docs/security/C01_CUTOVER_RUNBOOK.md`.
