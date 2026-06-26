@@ -1,0 +1,186 @@
+# Reusable: Gitleaks → build → Trivy → push → deploy (push to main/master only).
+#
+# Call from app repos with secrets: inherit
+
+name: Docker CI
+
+on:
+  workflow_call:
+    inputs:
+      app_title:
+        description: Display name in logs
+        type: string
+        required: true
+      repository_name:
+        description: REPOSITORY build-arg and resolve-version repo name
+        type: string
+        required: true
+      deploy_service:
+        description: novasafe-deployment deploy.sh service key
+        type: string
+        required: true
+      image_name:
+        description: Full image name without tag (default ghcr.io/owner/repo)
+        type: string
+        default: ""
+      use_version_action:
+        description: Pass version build-args from resolve-version
+        type: boolean
+        default: true
+
+    secrets:
+      SSH_USER:
+        required: true
+      SSH_HOST:
+        required: true
+      SSH_PASSWORD:
+        required: true
+      DEPLOY_PATH:
+        required: true
+      DEPLOY_REPO_PATH:
+        required: false
+      SSH_PRIVATE_KEY:
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  gitleaks:
+    name: Gitleaks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: novasafe-org/novasafe-deployment/.github/actions/gitleaks-cli@master
+
+  release:
+    name: Build & scan
+    needs: gitleaks
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ${{ inputs.image_name != '' && inputs.image_name || format('ghcr.io/{0}', github.repository) }}
+      SCAN_TAG: novasafe-ci:scan
+    steps:
+      - name: "━━━ ${{ inputs.app_title }} — CI pipeline ━━━"
+        run: |
+          echo "  Event      : ${{ github.event_name }}"
+          echo "  Branch     : ${{ github.ref_name }}"
+          echo "  Commit     : ${{ github.sha }}"
+          echo "  Image      : ${{ env.IMAGE }}"
+
+      - uses: actions/checkout@v4
+
+      - id: version
+        if: inputs.use_version_action
+        uses: novasafe-org/novasafe-deployment/.github/actions/resolve-version@master
+        with:
+          package-json: package.json
+          repository-name: ${{ inputs.repository_name }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image (local, versioned)
+        if: inputs.use_version_action
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: ${{ env.SCAN_TAG }}
+          push: false
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.version }}
+            BUILD_NUMBER=${{ steps.version.outputs.build }}
+            GIT_COMMIT=${{ steps.version.outputs.commit }}
+            RELEASED_AT=${{ steps.version.outputs.released_at }}
+            GIT_BRANCH=${{ github.ref_name }}
+            REPOSITORY=${{ inputs.repository_name }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build image (local)
+        if: ${{ !inputs.use_version_action }}
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: ${{ env.SCAN_TAG }}
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.SCAN_TAG }}
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - name: Push image (versioned)
+        if: github.event_name == 'push' && inputs.use_version_action
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.version }}
+            BUILD_NUMBER=${{ steps.version.outputs.build }}
+            GIT_COMMIT=${{ steps.version.outputs.commit }}
+            RELEASED_AT=${{ steps.version.outputs.released_at }}
+            GIT_BRANCH=${{ github.ref_name }}
+            REPOSITORY=${{ inputs.repository_name }}
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:${{ steps.version.outputs.version_tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Push image
+        if: github.event_name == 'push' && !inputs.use_version_action
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: "━━━ Build complete ━━━"
+        if: github.event_name == 'push'
+        run: echo "  OK Image pushed — starting deploy for ${{ inputs.deploy_service }}"
+
+  deploy:
+    name: Deploy
+    needs: release
+    if: github.event_name == 'push'
+    uses: novasafe-org/novasafe-deployment/.github/workflows/deploy-service.yml@master
+    with:
+      service: ${{ inputs.deploy_service }}
+      caller_repo: ${{ github.repository }}
+      caller_ref: ${{ github.ref_name }}@${{ github.sha }}
+    secrets:
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_REPO_PATH: ${{ secrets.DEPLOY_REPO_PATH }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
