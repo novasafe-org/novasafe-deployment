@@ -192,7 +192,7 @@ jobs:
           fi
 
       - name: Checkout deployment config
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: novasafe-org/novasafe-deployment
           ref: master

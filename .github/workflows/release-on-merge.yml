@@ -88,13 +88,13 @@ jobs:
         if: steps.bump.outputs.bump == 'skip'
         run: echo "No version bump (add type:feature / type:fix to the ticket). Deploy may still run."
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.bump.outputs.bump != 'skip'
         with:
           ref: ${{ inputs.default_branch }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.bump.outputs.bump != 'skip'
         with:
           repository: novasafe-org/novasafe-deployment
