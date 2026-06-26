@@ -44,7 +44,7 @@ jobs:
     steps:
       - name: Collect labels from PR and linked issues
         id: meta
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const pr = context.payload.pull_request;
@@ -154,7 +154,7 @@ jobs:
 
       - name: Create tag & GitHub Release
         if: steps.bump.outputs.bump != 'skip'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           VERSION: ${{ steps.commit.outputs.next }}
           SHA: ${{ steps.commit.outputs.sha }}

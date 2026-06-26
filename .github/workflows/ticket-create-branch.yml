@@ -34,7 +34,7 @@ jobs:
 
       - name: Create branch and draft PR
         id: ticket
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const issueNumber = ${{ inputs.issue_number }};
