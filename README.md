@@ -108,3 +108,4 @@ cd /opt/novasafe-deployment
 | [CERTIFICATE_SETUP.md](./CERTIFICATE_SETUP.md) | TLS setup |
 | [RUN_LOCALLY_AND_PROD.md](./RUN_LOCALLY_AND_PROD.md) | Local dev vs prod |
 | [MOBILE_API_DOMAIN.md](./MOBILE_API_DOMAIN.md) | Mobile API routing |
+
