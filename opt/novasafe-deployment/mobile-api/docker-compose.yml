@@ -1,12 +1,12 @@
 # Canonical compose for /opt/novasafe-deployment/mobile-api on the production server.
 # Synced by novasafe-deployment deploy.sh / GitHub Actions (does not overwrite .env).
 # Public HTTPS: https://mobile-api.novasafe.io (nginx → novasafe-mobile-vault:3124).
-# Image is built from services/core (novasafe-core); service key kept for smooth migration.
+# Image: services/core (C-01). Container name kept for nginx DNS compatibility.
 
 version: "3.9"
 
 services:
-  mobile_vault:
+  core:
     image: ghcr.io/novasafe-org/novasafe-mobile-vault:latest
     pull_policy: always
     container_name: novasafe-mobile-vault
