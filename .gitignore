@@ -1,5 +1,11 @@
 ./opt/novasafe-deployment/mobile-api/logs/*
 
+# TLS material — copy to VPS only (see infra/nginx/cloudflare/README.md)
+**/infra/nginx/cloudflare/origin.key
+**/infra/nginx/cloudflare/origin.crt
+**/infra/nginx/cloudflare/*.pem
+**/infra/nginx/cloudflare/*.key
+
 # .gitignore all the env files
 .env
 .env.local

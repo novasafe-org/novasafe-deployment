@@ -471,12 +471,14 @@ App repos may also have build-time secrets (`VITE_*`, etc.) for baking URLs into
 
 ### Cloudflare origin certs
 
+Place on the **VPS only** (never commit):
+
 ```
 infra/nginx/cloudflare/origin.crt
 infra/nginx/cloudflare/origin.key
 ```
 
-Copy from old server or generate in Cloudflare dashboard. See [CERTIFICATE_SETUP.md](./CERTIFICATE_SETUP.md).
+See `infra/nginx/cloudflare/README.md` and [CERTIFICATE_SETUP.md](./CERTIFICATE_SETUP.md).
 
 ---
 
