@@ -1,0 +1,19 @@
+# GitHub Projects → ticket automation
+#
+# When an issue is labeled `status:in-progress`, a branch + draft PR are created.
+# Configure your Project board automation to add that label when a card enters "In Progress".
+
+name: Ticket automation
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  start-ticket:
+    if: github.event.label.name == 'status:in-progress'
+    uses: novasafe-org/novasafe-deployment/.github/workflows/ticket-create-branch.yml@master
+    with:
+      issue_number: ${{ github.event.issue.number }}
+      default_branch: master
+    secrets: inherit
