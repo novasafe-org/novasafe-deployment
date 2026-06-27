@@ -1,0 +1,24 @@
+# Publish a GitHub Release when package.json version is bumped on main.
+
+name: Publish release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - package.json
+      - CHANGELOG.md
+      - '.release-please-manifest.json'
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  github-release:
+    permissions:
+      contents: write
+    uses: novasafe-org/novasafe-deployment/.github/workflows/publish-github-release.yml@master
