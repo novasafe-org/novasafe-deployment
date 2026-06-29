@@ -8,7 +8,9 @@ logging {
 
 loki.write "grafana_cloud" {
   endpoint {
-    url = sys.env("LOKI_URL")
+    url        = sys.env("LOKI_URL")
+    batch_wait = "1s"
+    batch_size = "1MiB"
 
     basic_auth {
       username = sys.env("LOKI_USERNAME")
@@ -20,9 +22,6 @@ loki.write "grafana_cloud" {
     cluster     = "novasafe-vps",
     environment = coalesce(sys.env("ENVIRONMENT"), "production"),
   }
-
-  batch_wait = "1s"
-  batch_size = "1MiB"
 }
 
 loki.process "app_logs" {
