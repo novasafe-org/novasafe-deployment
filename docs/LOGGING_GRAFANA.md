@@ -72,6 +72,43 @@ Errors:
 Grafana → **Dashboards** → **Import** → upload  
 `infra/observability/grafana/dashboards/novasafe-api-logs.json`
 
+**Important:** At the top, set **Datasource** to `grafanacloud-patientgelato620-logs` — **not** `usage-insights` or `alert-state-history`. Those are Grafana internal metrics, not your API logs.
+
+## Grafana datasource (read this)
+
+Your stack has multiple Loki-like datasources:
+
+| Datasource | What it is |
+|------------|------------|
+| `grafanacloud-*-logs` | **Your app logs** — use this in Explore & dashboard |
+| `grafanacloud-*-usage-insights` | Grafana Cloud billing/usage — **not your APIs** |
+| `grafanacloud-*-alert-state-history` | Alert history — **not your APIs** |
+
+**Logs Drilldown** showing `service=grafana` or `service=logs` is Grafana’s own telemetry, not NovaSafe.
+
+In **Explore**, select `grafanacloud-patientgelato620-logs` and run:
+
+```logql
+{job="novasafe"}
+```
+
+## Log delay (why not instant?)
+
+| Stage | Typical delay |
+|-------|----------------|
+| App writes to file | ~0s |
+| Alloy tails file | ~1–5s (`file_match sync_period`) |
+| Alloy batches push to Loki | ~1s (`batch_wait`) |
+| Grafana Cloud indexes chunk | **15–90s** on free tier (normal) |
+| Dashboard refresh | 5–30s depending on setting |
+
+**Total:** often **20–60 seconds** from log line → visible in Explore. **2 minutes** can happen on free tier during load or first ingest.
+
+For fastest view: **Explore → Loki → Live** (tail mode), datasource `*-logs`, query `{job="novasafe"}`.
+
+Dashboard panels use aggregated queries (`count_over_time`) which lag more than raw log lines.
+
+
 ## Adding a new service (scalable)
 
 1. Ensure the service writes JSON logs to a host-mounted directory (`app-%DATE%.log` pattern).
@@ -117,7 +154,9 @@ Keep production at `LOG_LEVEL=info`; avoid `debug` in Loki.
 
 | Symptom | Check |
 |---------|-------|
-| No logs in Explore | `docker logs novasafe-alloy`; verify `.env` credentials |
+| No logs in Explore | `docker logs novasafe-alloy`; verify `.env` credentials; redeploy alloy config |
+| Dashboard shows "No data" | Datasource must be `grafanacloud-*-logs`, not `usage-insights` |
+| Logs Drilldown shows `grafana`/`logs` only | Wrong stream — that's Grafana internal, not `{job="novasafe"}` |
 | Wrong service label | `service` label comes from Alloy config, not JSON `service` field |
 | Admin-api empty files | Redeploy admin-api image after file-logger fix |
 | Alloy `stat app-*.log` errors | Fixed via `local.file_match` — redeploy observability |

@@ -83,13 +83,13 @@
       "type": "logs"
     }
   ],
-  "refresh": "30s",
+  "refresh": "5s",
   "schemaVersion": 39,
   "tags": ["novasafe", "logs", "api"],
   "templating": {
     "list": [
       {
-        "current": { "selected": false, "text": "Loki", "value": "Loki" },
+        "current": {},
         "hide": 0,
         "includeAll": false,
         "label": "Datasource",
@@ -98,7 +98,7 @@
         "options": [],
         "query": "loki",
         "refresh": 1,
-        "regex": "",
+        "regex": "/grafanacloud-.*-logs$/",
         "type": "datasource"
       },
       {
@@ -120,11 +120,11 @@
       }
     ]
   },
-  "time": { "from": "now-24h", "to": "now" },
+  "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
   "title": "NovaSafe API Logs",
   "uid": "novasafe-api-logs",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

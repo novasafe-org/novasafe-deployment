@@ -20,6 +20,10 @@ loki.write "grafana_cloud" {
     cluster     = "novasafe-vps",
     environment = coalesce(env("ENVIRONMENT"), "production"),
   }
+
+  // Push batches quickly — Grafana Cloud still adds ~15–60s index delay on free tier
+  batch_wait = "1s"
+  batch_size = "1MiB"
 }
 
 loki.process "app_logs" {
