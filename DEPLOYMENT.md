@@ -550,7 +550,7 @@ rm /opt/novasafe-deployment/.novasafe-first-boot-done
 | `deploy.sh not found` | Initial setup failed | SSH in, run `initial-setup.sh` manually |
 | `.env missing` | Secrets not copied to VPS | Copy `.env` to correct path, redeploy |
 | `502 Bad Gateway` | Upstream container down | `docker ps`, `docker logs <container>` |
-| GHCR pull denied | Not logged in on VPS | CI passes `GHCR_TOKEN`; check package permissions |
+| GHCR pull 403 from deployment repo CI | `GITHUB_TOKEN` on novasafe-deployment cannot read app packages | Expected for config-only deploys (`skip_image_pull: true`). New images deploy from **novasafe-backend** CI. Optional org secret `GHCR_READ_TOKEN` (PAT `read:packages`) if VPS must pull without app pipeline |
 | `novasafe-network` not found | Network not created | `docker network create novasafe-network` |
 | TLS errors in browser | Certs missing/wrong | Check `infra/nginx/cloudflare/`, see CERTIFICATE_SETUP |
 | First-boot skips auth/app | No `.env` yet | Expected — copy `.env`, push app repo again |

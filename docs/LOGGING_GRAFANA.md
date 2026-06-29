@@ -75,14 +75,14 @@ Grafana → **Dashboards** → **Import** → upload
 ## Adding a new service (scalable)
 
 1. Ensure the service writes JSON logs to a host-mounted directory (`app-%DATE%.log` pattern).
-2. Copy `alloy/services/_template.alloy` → `alloy/services/<name>.alloy` and set `service` + `__path__`.
+2. Copy `alloy/_template.alloy` → `alloy/<name>.alloy` (same folder as `main.alloy`).
 3. Add a read-only volume in `docker-compose.yml`:
    ```yaml
    - /opt/novasafe-deployment/<path>/logs:/var/log/novasafe/<name>:ro
    ```
 4. `./deploy.sh observability`
 
-No changes to `main.alloy` are required — Alloy loads all files in `alloy/services/`.
+No changes to `main.alloy` are required — Alloy loads all `*.alloy` files in the `alloy/` directory (flat layout; subfolders are not loaded).
 
 ## Saved Explore queries (create in Grafana UI)
 
@@ -127,7 +127,7 @@ Keep production at `LOG_LEVEL=info`; avoid `debug` in Loki.
 | Path | Role |
 |------|------|
 | `alloy/main.alloy` | Shared JSON parse + Loki push |
-| `alloy/services/*.alloy` | Per-service file tailers |
+| `alloy/*.alloy` | Per-service file tailers (flat directory) |
 | `docker-compose.yml` | Alloy container + volume mounts |
 | `scripts/verify-alloy.sh` | Health check |
 | `scripts/prune-old-log-archives.sh` | 90-day VPS cleanup |

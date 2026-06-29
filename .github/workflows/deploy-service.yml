@@ -44,6 +44,13 @@ on:
         required: false
         type: string
         default: master
+      skip_image_pull:
+        description: >-
+          Config-only deploy — recreate containers without pulling from GHCR.
+          Use when novasafe-deployment changes compose/env only (no new image).
+        required: false
+        type: boolean
+        default: false
     secrets:
       SSH_USER:
         required: true
@@ -57,10 +64,15 @@ on:
         required: false
       SSH_PRIVATE_KEY:
         required: false
+      GHCR_READ_TOKEN:
+        required: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - name: "━━━ Deploy metadata ━━━"
@@ -74,6 +86,7 @@ jobs:
           echo "  Git ref         : ${{ inputs.caller_ref || github.ref_name }}"
           echo "  Service         : ${{ inputs.service }}"
           echo "  Sync config     : ${{ inputs.sync_config }}"
+          echo "  Skip image pull : ${{ inputs.skip_image_pull }}"
           echo "  Workflow run    : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           echo "  Timestamp (UTC) : $(date -u '+%Y-%m-%d %H:%M:%S')"
           echo ""
@@ -268,6 +281,8 @@ jobs:
           SYNC_CONFIG: ${{ inputs.sync_config }}
           GIT_SHA: ${{ inputs.git_sha }}
           DEPLOY_BRANCH: ${{ inputs.deploy_branch }}
+          SKIP_IMAGE_PULL: ${{ inputs.skip_image_pull }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -295,7 +310,12 @@ jobs:
             export NOVASAFE_DEPLOY_PATH="${DEPLOY_PATH}"
             export NOVASAFE_DEPLOY_REPO="${DEPLOY_REPO_PATH}"
             export NOVASAFE_DEPLOY_BRANCH="${DEPLOY_BRANCH}"
-            export GHCR_TOKEN="${GITHUB_TOKEN}"
+            export NOVASAFE_SKIP_IMAGE_PULL="${SKIP_IMAGE_PULL}"
+            if [ -n "${GHCR_READ_TOKEN:-}" ]; then
+              export GHCR_TOKEN="${GHCR_READ_TOKEN}"
+            else
+              export GHCR_TOKEN="${GITHUB_TOKEN}"
+            fi
             export GHCR_USER="${GITHUB_ACTOR}"
 
             DEPLOY_SCRIPT="${DEPLOY_PATH}/deploy.sh"

@@ -2,7 +2,7 @@
 # Deploy: ./deploy.sh observability  (requires infra/observability/.env on VPS)
 #
 # To add another service:
-#   1. Copy alloy/services/_template.alloy → alloy/services/<name>.alloy
+#   1. Copy alloy/_template.alloy → alloy/<name>.alloy (same directory as main.alloy)
 #   2. Add a read-only volume mount below for that service's log directory
 #   3. Redeploy: ./deploy.sh observability
 
@@ -15,8 +15,7 @@ services:
     restart: unless-stopped
     command:
       - run
-      - /etc/alloy/main.alloy
-      - /etc/alloy/services/
+      - /etc/alloy
       - --storage.path=/var/lib/alloy
       - --server.http.listen-addr=0.0.0.0:12345
       - --disable-reporting

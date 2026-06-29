@@ -1,4 +1,4 @@
-// Template — copy to <service-name>.alloy when adding a new API/service.
+// Template — copy to <service-name>.alloy in this directory (same level as main.alloy).
 //
 // 1. Set service label and __path__ glob to match the app's log filename pattern.
 // 2. Mount the host log directory in infra/observability/docker-compose.yml.

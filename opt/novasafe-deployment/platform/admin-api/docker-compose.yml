@@ -7,7 +7,7 @@ version: "3.9"
 services:
   admin_api:
     image: ghcr.io/novasafe-org/novasafe-admin-api:latest
-    pull_policy: always
+    pull_policy: missing
     container_name: novasafe-admin-api
     env_file:
       - .env

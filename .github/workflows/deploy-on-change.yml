@@ -151,6 +151,7 @@ jobs:
       deploy_branch: ${{ github.ref_name }}
       caller_repo: ${{ github.repository }}
       caller_ref: ${{ github.ref_name }}@${{ github.sha }}
+      skip_image_pull: true
     secrets:
       SSH_USER: ${{ secrets.SSH_USER }}
       SSH_HOST: ${{ secrets.SSH_HOST }}

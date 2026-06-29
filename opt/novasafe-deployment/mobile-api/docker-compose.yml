@@ -8,7 +8,7 @@ version: "3.9"
 services:
   core:
     image: ghcr.io/novasafe-org/novasafe-mobile-vault:latest
-    pull_policy: always
+    pull_policy: missing
     container_name: novasafe-mobile-vault
     env_file:
       - .env

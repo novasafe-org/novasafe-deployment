@@ -219,17 +219,26 @@ deploy_compose_dir() {
     detect_compose
     ghcr_login
 
-    if container_is_running "${container}"; then
-        log_ok "Container ${container} already running — pulling latest image and recreating"
+    local compose_pull="always"
+    if [ "${NOVASAFE_SKIP_IMAGE_PULL:-}" = "true" ]; then
+        log_info "Config-only deploy — will not force-pull GHCR app images"
+        compose_pull="missing"
+    else
+        log_step "Pulling latest image"
+        if $DC pull; then
+            log_ok "Image pull successful"
+        else
+            log_warn "Image pull failed — will use existing local image if available"
+            compose_pull="missing"
+        fi
     fi
 
-    log_step "Pulling latest image"
-    if ! $DC pull; then
-        log_warn "Image pull failed — attempting up with existing image"
+    if container_is_running "${container}"; then
+        log_ok "Container ${container} already running — recreating with updated config"
     fi
 
     log_step "Recreating container"
-    $DC up -d --remove-orphans
+    $DC up -d --pull "${compose_pull}" --remove-orphans
 
     log_step "Container status"
     docker ps --filter "name=${container}" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true

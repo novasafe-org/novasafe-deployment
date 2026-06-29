@@ -1,5 +1,5 @@
 // Shared pipeline: parse NovaSafe JSON logs → push to Grafana Cloud Loki.
-// Per-service file sources live in alloy/services/*.alloy
+// Per-service sources: other *.alloy files in this directory (flat — no subdirs).
 
 logging {
   level  = coalesce(env("ALLOY_LOG_LEVEL"), "info")
