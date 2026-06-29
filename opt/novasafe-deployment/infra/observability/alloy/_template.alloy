@@ -1,17 +1,18 @@
-// Template — copy to <service-name>.alloy in this directory.
+// Template — copy to <service-name>.alloy (remove .example suffix is not needed — copy content only)
 //
-// loki.source.file "SERVICE_KEY" {
-//   targets = [
+// local.file_match "SERVICE_KEY_logs" {
+//   path_targets = [
 //     {
-//       __path__    = "/var/log/novasafe/SERVICE_KEY/app-*.log",
-//       job         = "novasafe",
-//       service     = "SERVICE_KEY",
-//       environment = coalesce(env("ENVIRONMENT"), "production"),
+//       __path__      = "/var/log/novasafe/SERVICE_KEY/app-*.log",
+//       job           = "novasafe",
+//       service       = "SERVICE_KEY",
+//       environment   = coalesce(sys.env("ENVIRONMENT"), "production"),
 //     },
 //   ]
+//   sync_period = "5s"
+// }
+//
+// loki.source.file "SERVICE_KEY" {
+//   targets    = local.file_match.SERVICE_KEY_logs.targets
 //   forward_to = [loki.process.app_logs.receiver]
-//   file_match {
-//     enabled     = true
-//     sync_period = "5s"
-//   }
 // }

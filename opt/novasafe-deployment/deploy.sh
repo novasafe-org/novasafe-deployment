@@ -379,6 +379,16 @@ deploy_mobile_api() {
 
 deploy_observability() {
     deploy_compose_dir "${OBSERVABILITY_DIR}" "novasafe-alloy" true
+
+    if container_is_running "novasafe-alloy"; then
+        log_step "Recreating Alloy to reload mounted config"
+        cd "${OBSERVABILITY_DIR}"
+        detect_compose
+        $DC up -d --force-recreate alloy
+        if [ -x "${OBSERVABILITY_DIR}/scripts/verify-alloy.sh" ]; then
+            bash "${OBSERVABILITY_DIR}/scripts/verify-alloy.sh" || log_warn "Alloy verification reported issues"
+        fi
+    fi
 }
 
 deploy_admin_api() {

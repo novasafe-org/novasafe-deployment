@@ -2,32 +2,30 @@
 // Per-service sources: other *.alloy files in this directory (flat — no subdirs).
 
 logging {
-  level  = coalesce(env("ALLOY_LOG_LEVEL"), "info")
+  level  = coalesce(sys.env("ALLOY_LOG_LEVEL"), "info")
   format = "logfmt"
 }
 
 loki.write "grafana_cloud" {
   endpoint {
-    url = env("LOKI_URL")
+    url = sys.env("LOKI_URL")
 
     basic_auth {
-      username = env("LOKI_USERNAME")
-      password = env("LOKI_PASSWORD")
+      username = sys.env("LOKI_USERNAME")
+      password = sys.env("LOKI_PASSWORD")
     }
   }
 
   external_labels = {
     cluster     = "novasafe-vps",
-    environment = coalesce(env("ENVIRONMENT"), "production"),
+    environment = coalesce(sys.env("ENVIRONMENT"), "production"),
   }
 
-  // Push batches quickly — Grafana Cloud still adds ~15–60s index delay on free tier
   batch_wait = "1s"
   batch_size = "1MiB"
 }
 
 loki.process "app_logs" {
-  // Winston emits one JSON object per line
   stage.json {
     expressions = {
       level     = "level",
