@@ -120,6 +120,7 @@ Keep production at `LOG_LEVEL=info`; avoid `debug` in Loki.
 | No logs in Explore | `docker logs novasafe-alloy`; verify `.env` credentials |
 | Wrong service label | `service` label comes from Alloy config, not JSON `service` field |
 | Admin-api empty files | Redeploy admin-api image after file-logger fix |
+| Alloy `stat app-*.log` errors | Fixed via `local.file_match` — redeploy observability |
 | Alloy config change | `./deploy.sh observability` (recreates container) |
 
 ## Related files
