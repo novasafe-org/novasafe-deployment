@@ -132,11 +132,15 @@ ensure_file_executable "${BASE_DIR}/deploy.sh"
 for f in "${BASE_DIR}/scripts/"*.sh "${BASE_DIR}/scripts/lib/"*.sh; do
     ensure_file_executable "$f"
 done
+for f in "${BASE_DIR}/infra/observability/scripts/"*.sh; do
+    ensure_file_executable "$f"
+done
 
 log_ok "Config synced"
 
 # ── 6. Required directories ─────────────────────────────────────────────────
 ensure_directory "${BASE_DIR}/mobile-api/logs"
+ensure_directory "${BASE_DIR}/platform/admin-api/logs"
 ensure_directory "${BASE_DIR}/infra/nginx/cloudflare"
 
 # ── 7. Verify layout ────────────────────────────────────────────────────────

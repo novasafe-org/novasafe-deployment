@@ -589,6 +589,7 @@ curl -I http://127.0.0.1:3102/         # app
 | [RUN_LOCALLY_AND_PROD.md](./RUN_LOCALLY_AND_PROD.md) | Dev vs production URLs |
 | [MOBILE_API_DOMAIN.md](./MOBILE_API_DOMAIN.md) | mobile-api routing |
 | [PHASE2_HARDENING.md](./PHASE2_HARDENING.md) | Security hardening notes |
+| [docs/LOGGING_GRAFANA.md](./docs/LOGGING_GRAFANA.md) | Grafana Cloud + Alloy centralized logging |
 
 ---
 

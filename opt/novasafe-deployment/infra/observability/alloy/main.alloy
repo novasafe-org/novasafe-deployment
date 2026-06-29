@@ -1,0 +1,52 @@
+// Shared pipeline: parse NovaSafe JSON logs → push to Grafana Cloud Loki.
+// Per-service file sources live in alloy/services/*.alloy
+
+logging {
+  level  = coalesce(env("ALLOY_LOG_LEVEL"), "info")
+  format = "logfmt"
+}
+
+loki.write "grafana_cloud" {
+  endpoint {
+    url = env("LOKI_URL")
+
+    basic_auth {
+      username = env("LOKI_USERNAME")
+      password = env("LOKI_PASSWORD")
+    }
+  }
+
+  external_labels = {
+    cluster     = "novasafe-vps",
+    environment = coalesce(env("ENVIRONMENT"), "production"),
+  }
+}
+
+loki.process "app_logs" {
+  // Winston emits one JSON object per line
+  stage.json {
+    expressions = {
+      level     = "level",
+      message   = "message",
+      timestamp = "timestamp",
+      service   = "service",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level = "",
+    }
+  }
+
+  stage.timestamp {
+    source = "timestamp"
+    format = "RFC3339Nano"
+  }
+
+  stage.output {
+    source = "message"
+  }
+
+  forward_to = [loki.write.grafana_cloud.receiver]
+}

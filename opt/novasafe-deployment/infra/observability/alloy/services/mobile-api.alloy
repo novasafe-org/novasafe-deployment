@@ -1,0 +1,14 @@
+// mobile-api (core service) — app-YYYY-MM-DD.log from winston daily rotate
+
+loki.source.file "mobile_api" {
+  targets = [
+    {
+      __path__    = "/var/log/novasafe/mobile-api/app-*.log",
+      job         = "novasafe",
+      service     = "mobile-api",
+      environment = coalesce(env("ENVIRONMENT"), "production"),
+    },
+  ]
+
+  forward_to = [loki.process.app_logs.receiver]
+}

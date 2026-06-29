@@ -1,0 +1,18 @@
+// Template — copy to <service-name>.alloy when adding a new API/service.
+//
+// 1. Set service label and __path__ glob to match the app's log filename pattern.
+// 2. Mount the host log directory in infra/observability/docker-compose.yml.
+// 3. Run: ./deploy.sh observability
+//
+// loki.source.file "SERVICE_KEY" {
+//   targets = [
+//     {
+//       __path__    = "/var/log/novasafe/SERVICE_KEY/app-*.log",
+//       job         = "novasafe",
+//       service     = "SERVICE_KEY",
+//       environment = coalesce(env("ENVIRONMENT"), "production"),
+//     },
+//   ]
+//
+//   forward_to = [loki.process.app_logs.receiver]
+// }

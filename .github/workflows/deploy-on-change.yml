@@ -45,6 +45,8 @@ jobs:
               - 'opt/novasafe-deployment/mobile-api/**'
             admin-api:
               - 'opt/novasafe-deployment/platform/admin-api/**'
+            observability:
+              - 'opt/novasafe-deployment/infra/observability/**'
             nginx:
               - 'opt/novasafe-deployment/infra/nginx/**'
             sync:

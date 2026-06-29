@@ -25,6 +25,7 @@ APP_DIR="$BASE_DIR/platform/app"
 MOBILE_API_DIR="$BASE_DIR/mobile-api"
 ADMIN_API_DIR="$BASE_DIR/platform/admin-api"
 NGINX_DIR="$BASE_DIR/infra/nginx"
+OBSERVABILITY_DIR="$BASE_DIR/infra/observability"
 
 SERVICE="${1:-}"
 
@@ -395,6 +396,10 @@ deploy_mobile_api() {
     reload_nginx_if_running
 }
 
+deploy_observability() {
+    deploy_compose_dir "${OBSERVABILITY_DIR}" "novasafe-alloy" true
+}
+
 deploy_admin_api() {
     deploy_compose_dir "${ADMIN_API_DIR}" "novasafe-admin-api" true
 
@@ -456,6 +461,7 @@ run_service_deploy() {
         app)            deploy_compose_dir "${APP_DIR}" "novasafe-app" true ;;
         mobile-api)     deploy_mobile_api ;;
         admin-api)      deploy_admin_api ;;
+        observability)  deploy_observability ;;
         nginx)          deploy_nginx ;;
         *)
             log_error "Unknown service: ${target}"
@@ -482,6 +488,7 @@ deploy_all_services() {
     for entry in \
         "${MOBILE_API_DIR}:novasafe-mobile-vault:true" \
         "${ADMIN_API_DIR}:novasafe-admin-api:true" \
+        "${OBSERVABILITY_DIR}:novasafe-alloy:true" \
         "${AUTH_DIR}:novasafe-auth:true" \
         "${APP_DIR}:novasafe-app:true" \
         "${LANDING_DIR}:novasafe-landing:false" \
@@ -527,7 +534,7 @@ sync)
     sync_config
     ;;
 
-landing|mobile-landing|auth|app|mobile-api|admin-api|nginx)
+landing|mobile-landing|auth|app|mobile-api|admin-api|observability|nginx)
     if [ "${NOVASAFE_SKIP_SYNC:-}" != "true" ]; then
         sync_config
     fi
@@ -586,7 +593,7 @@ cleanup)
     echo ""
     echo "  ./deploy.sh ensure-ready     Run initial-setup + first-boot if needed"
     echo "  ./deploy.sh sync             Pull repo + sync config"
-    echo "  ./deploy.sh landing | auth | app | mobile-api | nginx | ..."
+    echo "  ./deploy.sh landing | auth | app | mobile-api | admin-api | observability | nginx | ..."
     echo "  ./deploy.sh all              Full stack (skips services without .env)"
     echo "  ./deploy.sh status | logs | restart | cleanup"
     echo ""

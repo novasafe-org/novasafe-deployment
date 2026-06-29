@@ -22,6 +22,8 @@ services:
       LOG_FILE_MODE: single
       LOG_DIR: /app/logs
       LOG_JSON_FORMAT: "true"
+      LOG_SERVICE_NAME: admin-api
+      LOG_MAX_FILES: "90d"
       MEDIA_STORAGE_PATH: /app/uploads
     mem_limit: 384m
     memswap_limit: 384m

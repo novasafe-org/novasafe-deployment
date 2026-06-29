@@ -27,6 +27,8 @@ services:
       LOG_PRETTY_PRINT: "false"
       LOG_ENABLE_REQUEST: "true"
       LOG_ENABLE_ERROR_STACK: "true"
+      LOG_SERVICE_NAME: mobile-api
+      LOG_MAX_FILES: "90d"
     mem_limit: 768m
     memswap_limit: 768m
     ports:

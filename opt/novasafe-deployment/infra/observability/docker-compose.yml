@@ -1,0 +1,44 @@
+# Grafana Alloy — ships NovaSafe API log files to Grafana Cloud Loki.
+# Deploy: ./deploy.sh observability  (requires infra/observability/.env on VPS)
+#
+# To add another service:
+#   1. Copy alloy/services/_template.alloy → alloy/services/<name>.alloy
+#   2. Add a read-only volume mount below for that service's log directory
+#   3. Redeploy: ./deploy.sh observability
+
+version: "3.9"
+
+services:
+  alloy:
+    image: grafana/alloy:v1.7.5
+    container_name: novasafe-alloy
+    restart: unless-stopped
+    command:
+      - run
+      - /etc/alloy/main.alloy
+      - /etc/alloy/services/
+      - --storage.path=/var/lib/alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --disable-reporting
+    env_file:
+      - .env
+    environment:
+      ENVIRONMENT: production
+      ALLOY_LOG_LEVEL: info
+    volumes:
+      - ./alloy:/etc/alloy:ro
+      - alloy-data:/var/lib/alloy
+      - /opt/novasafe-deployment/mobile-api/logs:/var/log/novasafe/mobile-api:ro
+      - /opt/novasafe-deployment/platform/admin-api/logs:/var/log/novasafe/admin-api:ro
+    ports:
+      - "127.0.0.1:12345:12345"
+    mem_limit: 192m
+    memswap_limit: 192m
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+volumes:
+  alloy-data:
