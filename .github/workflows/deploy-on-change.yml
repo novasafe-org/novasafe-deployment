@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       services: ${{ steps.filter.outputs.changes }}
+      deploy_services: ${{ steps.matrix.outputs.services }}
     steps:
       - name: "━━━ Detect changed services ━━━"
         run: |
@@ -67,6 +68,14 @@ jobs:
           fi
           echo "──────────────────────────────────────────────────────────────"
 
+      - name: "━━━ Deploy matrix (exclude sync) ━━━"
+        id: matrix
+        run: |
+          CHANGES='${{ steps.filter.outputs.changes }}'
+          FILTERED=$(echo "${CHANGES}" | jq -c '[.[] | select(. != "sync")]')
+          echo "services=${FILTERED}" >> "${GITHUB_OUTPUT}"
+          echo "  Deploy services (after sync): ${FILTERED}"
+
       - name: Validate deploy secrets
         run: |
           set -euo pipefail
@@ -107,18 +116,39 @@ jobs:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
-  deploy:
+  sync:
     needs: detect
     if: needs.detect.outputs.services != '[]'
+    uses: ./.github/workflows/deploy-service.yml
+    with:
+      service: sync
+      sync_config: true
+      git_sha: ${{ github.sha }}
+      deploy_branch: ${{ github.ref_name }}
+      caller_repo: ${{ github.repository }}
+      caller_ref: ${{ github.ref_name }}@${{ github.sha }}
+    secrets:
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_REPO_PATH: ${{ secrets.DEPLOY_REPO_PATH }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+  deploy:
+    needs: [detect, sync]
+    if: needs.detect.outputs.deploy_services != '[]'
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
-        service: ${{ fromJson(needs.detect.outputs.services) }}
+        service: ${{ fromJson(needs.detect.outputs.deploy_services) }}
     uses: ./.github/workflows/deploy-service.yml
     with:
       service: ${{ matrix.service }}
       sync_config: true
+      git_sha: ${{ github.sha }}
+      deploy_branch: ${{ github.ref_name }}
       caller_repo: ${{ github.repository }}
       caller_ref: ${{ github.ref_name }}@${{ github.sha }}
     secrets:

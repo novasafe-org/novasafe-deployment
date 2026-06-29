@@ -113,30 +113,7 @@ if [ ! -d "${REPO_ROOT}/opt/novasafe-deployment" ]; then
 fi
 
 # ── 5. Sync live config (never overwrites .env) ─────────────────────────────
-log_section "Sync config to live path"
-
-ensure_directory "${BASE_DIR}"
-log_step "Rsync → ${BASE_DIR}"
-rsync -a \
-    --exclude '.env' \
-    --exclude '.env.*' \
-    --exclude '**/.env' \
-    --exclude '**/.env.*' \
-    --exclude 'logs/' \
-    --exclude '**/logs/' \
-    --exclude '.novasafe-initial-setup-done' \
-    --exclude '.novasafe-first-boot-done' \
-    "${REPO_ROOT}/opt/novasafe-deployment/" "${BASE_DIR}/"
-
-ensure_file_executable "${BASE_DIR}/deploy.sh"
-for f in "${BASE_DIR}/scripts/"*.sh "${BASE_DIR}/scripts/lib/"*.sh; do
-    ensure_file_executable "$f"
-done
-for f in "${BASE_DIR}/infra/observability/scripts/"*.sh; do
-    ensure_file_executable "$f"
-done
-
-log_ok "Config synced"
+bash "${SCRIPT_DIR}/sync-deployment-repo.sh"
 
 # ── 6. Required directories ─────────────────────────────────────────────────
 ensure_directory "${BASE_DIR}/mobile-api/logs"

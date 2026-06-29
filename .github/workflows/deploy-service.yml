@@ -34,6 +34,16 @@ on:
         required: false
         type: string
         default: ''
+      git_sha:
+        description: Commit SHA the pipeline expects on the VPS after sync
+        required: false
+        type: string
+        default: ''
+      deploy_branch:
+        description: Deployment repo branch to fetch (master or main)
+        required: false
+        type: string
+        default: master
     secrets:
       SSH_USER:
         required: true
@@ -240,6 +250,7 @@ jobs:
           run_remote "rm -rf /tmp/novasafe-scripts && mkdir -p /tmp/novasafe-scripts/lib"
           run_scp "${SCRIPT_SRC}/initial-setup.sh" "/tmp/novasafe-scripts/initial-setup.sh"
           run_scp "${SCRIPT_SRC}/first-boot.sh" "/tmp/novasafe-scripts/first-boot.sh"
+          run_scp "${SCRIPT_SRC}/sync-deployment-repo.sh" "/tmp/novasafe-scripts/sync-deployment-repo.sh"
           run_scp "${SCRIPT_SRC}/lib/logging.sh" "/tmp/novasafe-scripts/lib/logging.sh"
           run_scp "${SCRIPT_SRC}/lib/common.sh" "/tmp/novasafe-scripts/lib/common.sh"
           run_remote "chmod +x /tmp/novasafe-scripts/*.sh /tmp/novasafe-scripts/lib/*.sh"
@@ -255,6 +266,8 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
           SERVICE: ${{ inputs.service }}
           SYNC_CONFIG: ${{ inputs.sync_config }}
+          GIT_SHA: ${{ inputs.git_sha }}
+          DEPLOY_BRANCH: ${{ inputs.deploy_branch }}
         run: |
           set -euo pipefail
 
@@ -281,12 +294,35 @@ jobs:
 
             export NOVASAFE_DEPLOY_PATH="${DEPLOY_PATH}"
             export NOVASAFE_DEPLOY_REPO="${DEPLOY_REPO_PATH}"
+            export NOVASAFE_DEPLOY_BRANCH="${DEPLOY_BRANCH}"
             export GHCR_TOKEN="${GITHUB_TOKEN}"
             export GHCR_USER="${GITHUB_ACTOR}"
 
             DEPLOY_SCRIPT="${DEPLOY_PATH}/deploy.sh"
             SETUP_SCRIPT="/tmp/novasafe-scripts/initial-setup.sh"
+            SYNC_SCRIPT="/tmp/novasafe-scripts/sync-deployment-repo.sh"
             BOOT_REPO="/tmp/novasafe-deployment-bootstrap"
+
+            run_git_sync() {
+              if [ -f "\${SYNC_SCRIPT}" ]; then
+                echo ""
+                echo "━━━ Fetch latest deployment repo (CI) ━━━"
+                export NOVASAFE_EXPECTED_SHA="${GIT_SHA}"
+                export NOVASAFE_STRICT_SHA="true"
+                bash "\${SYNC_SCRIPT}"
+                return 0
+              fi
+
+              echo "  ⚠ sync-deployment-repo.sh missing — falling back to deploy.sh sync"
+              if [ -f "\${DEPLOY_SCRIPT}" ]; then
+                export NOVASAFE_EXPECTED_SHA="${GIT_SHA}"
+                export NOVASAFE_STRICT_SHA="true"
+                "\${DEPLOY_SCRIPT}" sync
+                return 0
+              fi
+
+              return 1
+            }
 
             resolve_setup_script() {
               if [ -f "\${SETUP_SCRIPT}" ]; then
@@ -310,7 +346,17 @@ jobs:
             echo "  Server time (UTC) : \$(date -u '+%Y-%m-%d %H:%M:%S')"
             echo "  Deploy path       : ${DEPLOY_PATH}"
             echo "  Target service    : ${SERVICE}"
+            echo "  Pipeline commit   : ${GIT_SHA:-n/a}"
             echo ""
+
+            # ── Always fetch + hard-reset deployment repo before anything else ─
+            if [ "${SYNC_CONFIG}" = "true" ]; then
+              if ! run_git_sync; then
+                echo "━━━ Fresh server detected — bootstrap required ━━━"
+                resolve_setup_script || exit 1
+                bash "\${SETUP_SCRIPT}"
+              fi
+            fi
 
             # ── Fresh server: no deploy.sh yet ──────────────────────────────
             if [ ! -f "\${DEPLOY_SCRIPT}" ]; then
@@ -324,17 +370,6 @@ jobs:
             fi
 
             chmod +x "\${DEPLOY_SCRIPT}" 2>/dev/null || true
-
-            # ── Sync latest config FIRST (updates deploy.sh before ensure-ready) ─
-            if [ "${SYNC_CONFIG}" = "true" ] && [ "${SERVICE}" != "sync" ]; then
-              echo ""
-              echo "━━━ Sync latest config ━━━"
-              if [ -f "\${DEPLOY_SCRIPT}" ]; then
-                "\${DEPLOY_SCRIPT}" sync || { resolve_setup_script && bash "\${SETUP_SCRIPT}"; }
-              else
-                resolve_setup_script && bash "\${SETUP_SCRIPT}"
-              fi
-            fi
 
             if [ "${SERVICE}" = "sync" ] && [ ! -f "\${DEPLOY_SCRIPT}" ]; then
               echo ""
@@ -362,7 +397,7 @@ jobs:
             if [ "${SERVICE}" = "sync" ]; then
               echo ""
               echo "━━━ Sync-only deploy ━━━"
-              "\${DEPLOY_SCRIPT}" sync
+              run_git_sync || "\${DEPLOY_SCRIPT}" sync
             else
               echo ""
               echo "━━━ Deploy service: ${SERVICE} ━━━"

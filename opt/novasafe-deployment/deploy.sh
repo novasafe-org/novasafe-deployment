@@ -165,37 +165,9 @@ ghcr_login() {
 }
 
 sync_config() {
-    log_section "Sync deployment config"
-
-    if [ ! -d "${REPO_ROOT}/.git" ]; then
-        log_error "Git repo not found at ${REPO_ROOT}"
-        log_info "Run: ./deploy.sh ensure-ready  (or initial-setup.sh on a fresh server)"
-        exit 1
-    fi
-
-    log_step "Pulling latest from Git"
-    cd "${REPO_ROOT}"
-    git fetch origin -q 2>/dev/null || log_warn "git fetch failed — using local copy"
-    git pull origin master 2>/dev/null || git pull origin main 2>/dev/null || log_warn "git pull failed — using local copy"
-
-    ensure_directory "${BASE_DIR}"
-    rsync -a \
-        --exclude '.env' \
-        --exclude '.env.*' \
-        --exclude '**/.env' \
-        --exclude '**/.env.*' \
-        --exclude 'logs/' \
-        --exclude '**/logs/' \
-        --exclude '.novasafe-initial-setup-done' \
-        --exclude '.novasafe-first-boot-done' \
-        "${REPO_ROOT}/opt/novasafe-deployment/" "${BASE_DIR}/"
-
-    ensure_file_executable "${BASE_DIR}/deploy.sh"
-    for f in "${BASE_DIR}/scripts/"*.sh "${BASE_DIR}/scripts/lib/"*.sh; do
-        ensure_file_executable "$f"
-    done
-
-    log_ok "Config synced to ${BASE_DIR}"
+    local strict="${NOVASAFE_STRICT_SHA:-false}"
+    export NOVASAFE_STRICT_SHA="${strict}"
+    bash "${SCRIPTS_DIR}/sync-deployment-repo.sh"
 }
 
 require_env_file() {
