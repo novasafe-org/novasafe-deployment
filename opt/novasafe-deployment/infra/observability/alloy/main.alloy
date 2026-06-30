@@ -1,5 +1,8 @@
 // Shared pipeline: parse NovaSafe JSON logs → push to Grafana Cloud Loki.
 // Per-service sources: other *.alloy files in this directory (flat — no subdirs).
+//
+// Vendor-neutral: apps emit schema v1 JSON (see novasafe-backend/docs/OBSERVABILITY.md).
+// This file maps JSON fields → Loki labels. Datadog migration reuses the same JSON.
 
 logging {
   level  = coalesce(sys.env("ALLOY_LOG_LEVEL"), "info")
@@ -25,28 +28,31 @@ loki.write "grafana_cloud" {
 }
 
 loki.process "app_logs" {
+  // Parse structured JSON — keep full line in Loki (no stage.output) for | json queries.
   stage.json {
     expressions = {
-      level     = "level",
-      message   = "message",
-      timestamp = "timestamp",
-      service   = "service",
+      timestamp   = "timestamp",
+      level       = "level",
+      log_type    = "logType",
+      service     = "service",
+      environment = "environment",
+      method      = "method",
+      status_code = "statusCode",
+      status_class = "statusClass",
     }
   }
 
+  // Low-cardinality labels only (safe for Loki + Datadog tags).
   stage.labels {
     values = {
-      level = "",
+      level        = "",
+      log_type     = "",
     }
   }
 
   stage.timestamp {
     source = "timestamp"
     format = "RFC3339Nano"
-  }
-
-  stage.output {
-    source = "message"
   }
 
   forward_to = [loki.write.grafana_cloud.receiver]

@@ -61,10 +61,16 @@ In Grafana → **Explore** → Loki:
 {job="novasafe", service="mobile-api"}
 ```
 
+Access logs (schema v1):
+
+```logql
+{job="novasafe", log_type="access"} | json
+```
+
 Errors:
 
 ```logql
-{job="novasafe"} | json | level="error"
+{job="novasafe", level="error"}
 ```
 
 ### 5. Import dashboard
@@ -72,7 +78,38 @@ Errors:
 Grafana → **Dashboards** → **Import** → upload  
 `infra/observability/grafana/dashboards/novasafe-api-logs.json`
 
+If you already imported an older version, re-import the same file (same UID `novasafe-api-logs`) and choose **Replace existing**.
+
 **Important:** At the top, set **Datasource** to `grafanacloud-patientgelato620-logs` — **not** `usage-insights` or `alert-state-history`. Those are Grafana internal metrics, not your API logs.
+
+**Dashboard layout (v4 — schema v1):**
+
+| Section | Panels |
+|---------|--------|
+| Overview | Total, errors, warnings, HTTP requests, 5xx, avg latency (% change) |
+| Trends | Stacked bars by level, donut, bar gauge by service |
+| HTTP | Status class (2xx–5xx), p50/p95/p99 latency |
+| Live logs | JSON table: Level, Service, Method, Path, Status, Duration, Trace ID, User ID |
+| Matrix | Service × level counts |
+| Errors | Detail log stream |
+| Footer | Volume by service |
+
+Filters: **Service**, **Environment**, **Log Level**, **Log Type** (`access` / `app` / `audit`).
+
+## Vendor-neutral schema (Grafana today, Datadog tomorrow)
+
+Apps emit **schema v1 JSON** (see `novasafe-backend/docs/OBSERVABILITY.md`). The collector (Alloy) only maps fields → Loki labels; **never change log shape per vendor**.
+
+| JSON field | Loki label | Datadog tag (migration) |
+|------------|------------|-------------------------|
+| `level` | `level` | `status` |
+| `logType` | `log_type` | `log_type` |
+| `service` | `service` | `service` |
+| `method`, `path`, `userId`, … | JSON only | attributes |
+
+**Rollout order:** deploy backend images → `./deploy.sh observability` → re-import dashboard.
+
+Legacy logs (plain-text line, `level=http`) age out of Loki in ~14 days after deploy.
 
 ## Grafana datasource (read this)
 
@@ -127,8 +164,9 @@ No changes to `main.alloy` are required — Alloy loads all `*.alloy` files in t
 |------|-------|
 | Mobile API — all | `{job="novasafe", service="mobile-api"}` |
 | Admin API — all | `{job="novasafe", service="admin-api"}` |
-| All errors | `{job="novasafe"} \| json \| level="error"` |
-| HTTP 5xx | `{job="novasafe"} \| json \| statusCode >= 500` |
+| HTTP access | `{job="novasafe", log_type="access"} \| json` |
+| All errors | `{job="novasafe", level="error"}` |
+| HTTP 5xx | `{job="novasafe", log_type="access"} \| json \| statusCode >= 500` |
 
 ## Backfill (optional)
 
@@ -160,7 +198,8 @@ Keep production at `LOG_LEVEL=info`; avoid `debug` in Loki.
 | Wrong service label | `service` label comes from Alloy config, not JSON `service` field |
 | Admin-api empty files | Redeploy admin-api image after file-logger fix |
 | Alloy `stat app-*.log` errors | Fixed via `local.file_match` — redeploy observability |
-| Alloy config change | `./deploy.sh observability` (recreates container) |
+| Dashboard KPIs empty | Redeploy backend + Alloy; logs must be JSON schema v1 (not stripped plain text) |
+| `log_type` label missing | Redeploy observability (`main.alloy` keeps full JSON + labels) |
 
 ## Related files
 

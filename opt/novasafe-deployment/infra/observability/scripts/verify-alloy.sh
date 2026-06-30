@@ -54,6 +54,24 @@ docker exec "${CONTAINER}" ls -la /var/log/novasafe/mobile-api/app-*.log 2>/dev/
 docker exec "${CONTAINER}" ls -la /var/log/novasafe/admin-api/app-*.log 2>/dev/null | tail -3 || echo "WARN: no files in container admin-api mount"
 
 echo ""
+echo "--- Log schema (schema v1 JSON on disk) ---"
+sample=""
+for dir in "${MOBILE_LOGS}" "${ADMIN_LOGS}"; do
+  latest=$(ls -t "${dir}"/app-*.log 2>/dev/null | head -1 || true)
+  if [ -n "${latest}" ]; then
+    sample=$(tail -1 "${latest}" 2>/dev/null || true)
+    break
+  fi
+done
+if [ -n "${sample}" ] && echo "${sample}" | grep -q '"schemaVersion"'; then
+  echo "OK: latest log line is schema v1 JSON"
+elif [ -n "${sample}" ] && echo "${sample}" | grep -q '^{'; then
+  echo "WARN: JSON logs without schemaVersion — redeploy backend images"
+else
+  echo "WARN: logs are not JSON yet — redeploy mobile-api / admin-api"
+fi
+
+echo ""
 echo "--- Alloy errors (stat failed = old config still loaded) ---"
 if docker logs "${CONTAINER}" 2>&1 | tail -80 | grep -q 'failed to tail file, stat failed'; then
   echo "FAIL: stat failed errors present — recreate alloy:"
