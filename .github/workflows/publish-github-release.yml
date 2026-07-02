@@ -1,0 +1,161 @@
+# Create a GitHub Release when package.json version has no matching tag yet.
+#
+# Call after deploy on push to main/master, or from publish-release.yml on push.
+
+name: Publish GitHub Release
+
+on:
+  workflow_call:
+    inputs:
+      package-json:
+        description: Path to package.json (semver source)
+        required: false
+        type: string
+        default: package.json
+      changelog-path:
+        description: CHANGELOG.md path for release notes
+        required: false
+        type: string
+        default: CHANGELOG.md
+      manifest-path:
+        description: Optional .release-please-manifest.json to sync
+        required: false
+        type: string
+        default: .release-please-manifest.json
+      manifest-key:
+        description: Key inside manifest JSON ("." for root)
+        required: false
+        type: string
+        default: "."
+      tag-prefix:
+        description: Optional tag prefix before vX.Y.Z (e.g. mobile-api-)
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version & release notes
+        id: meta
+        env:
+          PKG: ${{ inputs.package-json }}
+          CL: ${{ inputs.changelog-path }}
+          PREFIX: ${{ inputs.tag-prefix }}
+        run: |
+          set -euo pipefail
+          if [ ! -f "$PKG" ]; then
+            echo "::error::package.json not found at $PKG"
+            exit 1
+          fi
+          VERSION=$(node -p "require('./${PKG}').version")
+          TAG="${PREFIX}v${VERSION}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          export VERSION CL
+          if [ -f "$CL" ]; then
+            BODY=$(node -e "
+              const fs = require('fs');
+              const version = process.env.VERSION;
+              const cl = fs.readFileSync(process.env.CL, 'utf8');
+              const esc = version.replace(/\\./g, '\\\\.');
+              const re = new RegExp('## v' + esc + '\\\\b[\\\\s\\\\S]*?(?=\\\\n## v|\$)');
+              const match = cl.match(re);
+              process.stdout.write(match ? match[0].trim() : 'Release v' + version);
+            ")
+          else
+            BODY="Release **v${VERSION}**"
+          fi
+          {
+            echo "body<<EOF"
+            echo "$BODY"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "── Publish GitHub Release ──"
+          echo "  version : v${VERSION}"
+          echo "  tag     : ${TAG}"
+
+      - name: Skip if tag already exists
+        id: exists
+        run: |
+          if git rev-parse "${{ steps.meta.outputs.tag }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag ${{ steps.meta.outputs.tag }} already exists — skipping."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sync release manifest
+        if: steps.exists.outputs.exists != 'true'
+        env:
+          MANIFEST: ${{ inputs.manifest-path }}
+          MANIFEST_KEY: ${{ inputs.manifest-key }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          if [ ! -f "$MANIFEST" ]; then
+            echo "No manifest at $MANIFEST — skip"
+            exit 0
+          fi
+          node -e "
+            const fs = require('fs');
+            const data = JSON.parse(fs.readFileSync(process.env.MANIFEST, 'utf8'));
+            const key = process.env.MANIFEST_KEY;
+            if (key === '.') data['.'] = process.env.VERSION;
+            else data[key] = process.env.VERSION;
+            fs.writeFileSync(process.env.MANIFEST, JSON.stringify(data, null, 2) + '\n');
+          "
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$MANIFEST"
+          git diff --cached --quiet || git commit -m "chore(release): sync manifest v${VERSION} [skip release]"
+          git push || true
+
+      - name: Create tag & GitHub Release
+        if: steps.exists.outputs.exists != 'true'
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          BODY: ${{ steps.meta.outputs.body }}
+        with:
+          script: |
+            const tag = process.env.TAG;
+            const version = process.env.VERSION;
+            const body = process.env.BODY;
+            const sha = context.sha;
+            const { owner, repo } = context.repo;
+
+            await github.rest.git.createRef({
+              owner,
+              repo,
+              ref: `refs/tags/${tag}`,
+              sha,
+            }).catch((err) => {
+              if (err.status !== 422) throw err;
+              core.info(`Tag ${tag} already exists`);
+            });
+
+            await github.rest.repos.createRelease({
+              owner,
+              repo,
+              tag_name: tag,
+              target_commitish: sha,
+              name: tag,
+              body,
+              generate_release_notes: false,
+            }).catch((err) => {
+              if (err.status !== 422) throw err;
+              core.info(`Release ${tag} already exists`);
+            });
+
+            core.info(`Published GitHub Release ${tag} for v${version}`);

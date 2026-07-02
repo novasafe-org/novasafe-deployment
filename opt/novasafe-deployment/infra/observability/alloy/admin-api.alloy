@@ -1,0 +1,19 @@
+// admin-api — winston daily rotate: app-YYYY-MM-DD.log
+
+local.file_match "admin_api_logs" {
+  path_targets = [
+    {
+      __path__      = "/var/log/novasafe/admin-api/app-*.log",
+      job           = "novasafe",
+      service       = "admin-api",
+      environment   = coalesce(sys.env("ENVIRONMENT"), "production"),
+    },
+  ]
+
+  sync_period = "5s"
+}
+
+loki.source.file "admin_api" {
+  targets    = local.file_match.admin_api_logs.targets
+  forward_to = [loki.process.app_logs.receiver]
+}

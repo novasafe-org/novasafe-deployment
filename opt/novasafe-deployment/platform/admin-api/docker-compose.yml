@@ -1,0 +1,52 @@
+# Canonical compose for /opt/novasafe-deployment/platform/admin-api on the production server.
+# Public HTTPS: https://admin-api.novasafe.io (nginx → novasafe-admin-api:3130).
+# UI is deployed separately on Netlify (novasafe-admin-panel).
+
+version: "3.9"
+
+services:
+  admin_api:
+    image: ghcr.io/novasafe-org/novasafe-admin-api:latest
+    pull_policy: missing
+    container_name: novasafe-admin-api
+    env_file:
+      - .env
+    environment:
+      ADMIN_PORT: "3130"
+      PORT: "3130"
+      NODE_ENV: production
+      # Cap Node heap — prevents one container from consuming all VPS RAM
+      NODE_OPTIONS: "--max-old-space-size=320"
+      LOG_ENABLE_CONSOLE: "false"
+      LOG_ENABLE_FILE: "true"
+      LOG_FILE_MODE: single
+      LOG_DIR: /app/logs
+      LOG_JSON_FORMAT: "true"
+      LOG_SERVICE_NAME: admin-api
+      LOG_MAX_FILES: "90d"
+      MEDIA_STORAGE_PATH: /app/uploads
+    mem_limit: 384m
+    memswap_limit: 384m
+    ports:
+      - "127.0.0.1:8086:3130"
+    volumes:
+      - /opt/novasafe-deployment/platform/admin-api/logs:/app/logs
+      - /opt/novasafe-deployment/platform/admin-api/uploads:/app/uploads
+    networks:
+      - novasafe-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3130/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  novasafe-network:
+    external: true

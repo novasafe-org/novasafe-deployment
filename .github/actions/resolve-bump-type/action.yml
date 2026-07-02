@@ -1,0 +1,49 @@
+name: Resolve semver bump from labels
+description: Map GitHub issue/PR labels to patch, minor, major, or skip.
+
+inputs:
+  labels:
+    description: Newline-separated label names (issue or PR)
+    required: true
+
+outputs:
+  bump:
+    description: patch | minor | major | skip
+    value: ${{ steps.resolve.outputs.bump }}
+  section:
+    description: Changelog section title
+    value: ${{ steps.resolve.outputs.section }}
+
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      shell: bash
+      env:
+        LABELS: ${{ inputs.labels }}
+      run: |
+        set -euo pipefail
+        bump="patch"
+        section="Changed"
+        labels_lower=$(echo "$LABELS" | tr '[:upper:]' '[:lower:]')
+
+        if echo "$labels_lower" | grep -qE 'type:breaking|breaking-change|semver:major'; then
+          bump="major"
+          section="Breaking"
+        elif echo "$labels_lower" | grep -qE 'type:feature|type:feat|semver:minor'; then
+          bump="minor"
+          section="Added"
+        elif echo "$labels_lower" | grep -qE 'type:fix|type:bug|semver:patch'; then
+          bump="patch"
+          section="Fixed"
+        elif echo "$labels_lower" | grep -qE 'type:perf'; then
+          bump="patch"
+          section="Improved"
+        elif echo "$labels_lower" | grep -qE 'type:chore|type:docs|type:ci|no-release|skip-release'; then
+          bump="skip"
+          section="Maintenance"
+        fi
+
+        echo "bump=$bump" >> "$GITHUB_OUTPUT"
+        echo "section=$section" >> "$GITHUB_OUTPUT"
+        echo "Resolved bump=$bump section=$section from labels"

@@ -1,0 +1,56 @@
+name: Resolve NovaSafe version
+description: Read semver from package.json and compute build metadata for CI/Docker.
+
+inputs:
+  package-json:
+    description: Path to package.json relative to repository root
+    required: false
+    default: package.json
+  repository-name:
+    description: Logical service name (e.g. novasafe-landing-v2)
+    required: false
+    default: ""
+
+outputs:
+  version:
+    description: Semver without v prefix (e.g. 1.4.2)
+    value: ${{ steps.resolve.outputs.version }}
+  version_tag:
+    description: Git tag style version (e.g. v1.4.2)
+    value: ${{ steps.resolve.outputs.version_tag }}
+  build:
+    description: Build number YYYYMMDD.HHMM (UTC)
+    value: ${{ steps.resolve.outputs.build }}
+  commit:
+    description: Short git commit SHA
+    value: ${{ steps.resolve.outputs.commit }}
+  released_at:
+    description: ISO-8601 release timestamp
+    value: ${{ steps.resolve.outputs.released_at }}
+
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      shell: bash
+      run: |
+        set -euo pipefail
+        PKG="${{ inputs.package-json }}"
+        if [ ! -f "$PKG" ]; then
+          echo "::error::package.json not found at $PKG"
+          exit 1
+        fi
+        VERSION=$(node -p "require('./$PKG').version || '0.0.0'")
+        BUILD=$(date -u +%Y%m%d.%H%M)
+        COMMIT="${GITHUB_SHA:0:7}"
+        RELEASED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "version_tag=v$VERSION" >> "$GITHUB_OUTPUT"
+        echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+        echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
+        echo "released_at=$RELEASED_AT" >> "$GITHUB_OUTPUT"
+        echo "── NovaSafe version ──"
+        echo "  package : $PKG"
+        echo "  version : v$VERSION"
+        echo "  build   : $BUILD"
+        echo "  commit  : $COMMIT"

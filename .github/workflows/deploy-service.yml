@@ -1,0 +1,440 @@
+# Reusable deploy workflow — called from app repos and from deploy-on-change.yml.
+#
+# On a fresh VPS this workflow automatically:
+#   1. Uploads bootstrap scripts
+#   2. Runs initial-setup (Docker, git clone, sync)
+#   3. Runs first-boot (start stack; skips services without .env)
+#   4. Deploys the requested service
+#
+# Required secrets — must exist on EVERY repo that calls this workflow
+# (including novasafe-deployment itself), or as org secrets with access
+# to all NovaSafe repos.
+
+name: Deploy Service
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: Service key (landing, auth, app, mobile-landing, mobile-api, admin-api, observability, nginx, sync)
+        required: true
+        type: string
+      sync_config:
+        description: Pull latest deployment repo and sync files before deploy
+        required: false
+        type: boolean
+        default: true
+      caller_repo:
+        description: Repository that triggered this deploy (for logs)
+        required: false
+        type: string
+        default: novasafe-org/novasafe-deployment
+      caller_ref:
+        description: Git ref that triggered this deploy (for logs)
+        required: false
+        type: string
+        default: ''
+      git_sha:
+        description: Commit SHA the pipeline expects on the VPS after sync
+        required: false
+        type: string
+        default: ''
+      deploy_branch:
+        description: Deployment repo branch to fetch (master or main)
+        required: false
+        type: string
+        default: master
+      skip_image_pull:
+        description: >-
+          Config-only deploy — recreate containers without pulling from GHCR.
+          Use when novasafe-deployment changes compose/env only (no new image).
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      SSH_USER:
+        required: true
+      SSH_HOST:
+        required: true
+      SSH_PASSWORD:
+        required: true
+      DEPLOY_PATH:
+        required: true
+      DEPLOY_REPO_PATH:
+        required: false
+      SSH_PRIVATE_KEY:
+        required: false
+      GHCR_READ_TOKEN:
+        required: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: "━━━ Deploy metadata ━━━"
+        run: |
+          echo ""
+          echo "╔══════════════════════════════════════════════════════════════╗"
+          echo "║              NovaSafe — Remote Deploy                        ║"
+          echo "╚══════════════════════════════════════════════════════════════╝"
+          echo ""
+          echo "  Triggered by    : ${{ inputs.caller_repo }}"
+          echo "  Git ref         : ${{ inputs.caller_ref || github.ref_name }}"
+          echo "  Service         : ${{ inputs.service }}"
+          echo "  Sync config     : ${{ inputs.sync_config }}"
+          echo "  Skip image pull : ${{ inputs.skip_image_pull }}"
+          echo "  Workflow run    : ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "  Timestamp (UTC) : $(date -u '+%Y-%m-%d %H:%M:%S')"
+          echo ""
+          echo "──────────────────────────────────────────────────────────────"
+
+      - name: Validate and configure SSH
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_REPO_PATH: ${{ secrets.DEPLOY_REPO_PATH }}
+        run: |
+          set -euo pipefail
+
+          trim() { printf '%s' "$1" | tr -d '[:space:]'; }
+
+          SSH_USER="$(trim "${SSH_USER}")"
+          SSH_HOST="$(trim "${SSH_HOST}")"
+          DEPLOY_PATH="$(trim "${DEPLOY_PATH}")"
+          DEPLOY_REPO_PATH="$(trim "${DEPLOY_REPO_PATH:-/opt/novasafe-deployment-repo}")"
+          SSH_PRIVATE_KEY="$(trim "${SSH_PRIVATE_KEY:-}")"
+
+          # Strip accidental user@ or protocol prefixes from SSH_HOST
+          SSH_HOST="${SSH_HOST#*@}"
+          SSH_HOST="${SSH_HOST#*://}"
+          SSH_HOST="${SSH_HOST%%/*}"
+
+          echo "▶ Checking required secrets..."
+          if [ -z "${SSH_USER}" ] || [ -z "${SSH_HOST}" ] || [ -z "${DEPLOY_PATH}" ]; then
+            echo "::error::Missing SSH_USER, SSH_HOST, or DEPLOY_PATH."
+            echo "::error::Add org secrets accessible by novasafe-deployment and all app repos."
+            exit 1
+          fi
+          if [ -z "${SSH_PASSWORD}" ] && [ -z "${SSH_PRIVATE_KEY}" ]; then
+            echo "::error::Missing SSH_PASSWORD."
+            exit 1
+          fi
+
+          USE_SSH_KEY=false
+          if printf '%s' "${SSH_PRIVATE_KEY}" | grep -q 'BEGIN.*PRIVATE KEY'; then
+            USE_SSH_KEY=true
+          elif [ -n "${SSH_PRIVATE_KEY}" ]; then
+            echo "::warning::SSH_PRIVATE_KEY is set but not a valid PEM key — using SSH_PASSWORD instead."
+            echo "::warning::Delete the bad SSH_PRIVATE_KEY repo secret on novasafe-deployment if you only use password auth."
+          fi
+
+          # SSH_HOST must be VPS IP (recommended) or a resolvable hostname
+          if ! printf '%s' "${SSH_HOST}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "  ⚠ SSH_HOST is not an IPv4 address — using hostname (IP is recommended for Hostinger)"
+            if ! getent hosts "${SSH_HOST}" >/dev/null 2>&1; then
+              echo "::error::Cannot resolve SSH_HOST '${SSH_HOST}'. Use the Hostinger VPS public IP (e.g. 123.45.67.89), not a panel URL or username."
+              exit 1
+            fi
+          fi
+
+          echo "  ✔ SSH_USER     : ${SSH_USER}"
+          echo "  ✔ SSH_HOST     : ${SSH_HOST}"
+          echo "  ✔ DEPLOY_PATH  : ${DEPLOY_PATH}"
+          echo "  ✔ Auth method  : $([ "${USE_SSH_KEY}" = true ] && echo 'SSH key' || echo 'root password')"
+
+          echo "SSH_USER=${SSH_USER}" >> "${GITHUB_ENV}"
+          echo "SSH_HOST=${SSH_HOST}" >> "${GITHUB_ENV}"
+          echo "DEPLOY_PATH=${DEPLOY_PATH}" >> "${GITHUB_ENV}"
+          echo "DEPLOY_REPO_PATH=${DEPLOY_REPO_PATH}" >> "${GITHUB_ENV}"
+          echo "USE_SSH_KEY=${USE_SSH_KEY}" >> "${GITHUB_ENV}"
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          if [ "${USE_SSH_KEY}" = true ]; then
+            printf '%s\n' "${SSH_PRIVATE_KEY}" > ~/.ssh/deploy_key
+            chmod 600 ~/.ssh/deploy_key
+            echo "  ✔ Deploy key loaded"
+          fi
+
+      - name: Install sshpass
+        run: |
+          echo "▶ Installing sshpass for password-based SSH..."
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sshpass
+          echo "  ✔ sshpass ready"
+
+      - name: Test VPS SSH connectivity
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          run_remote() {
+            if [ "${USE_SSH_KEY}" = true ] && [ -f ~/.ssh/deploy_key ]; then
+              ssh -i ~/.ssh/deploy_key \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                -o ConnectTimeout=20 \
+                "${SSH_USER}@${SSH_HOST}" "$@"
+            else
+              sshpass -p "${SSH_PASSWORD}" ssh \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                -o ConnectTimeout=20 \
+                "${SSH_USER}@${SSH_HOST}" "$@"
+            fi
+          }
+
+          echo "▶ Testing TCP port 22 on ${SSH_HOST}..."
+          if timeout 15 bash -c "echo >/dev/tcp/${SSH_HOST}/22" 2>/dev/null; then
+            echo "  ✔ Port 22 is reachable from GitHub Actions"
+          else
+            echo "::error::Cannot reach ${SSH_HOST} on port 22 from GitHub Actions."
+            echo "::error::Your VPS IP is probably correct (static IP does not need changing)."
+            echo "::error::Fix Hostinger firewall / hPanel → Security → Firewall:"
+            echo "::error::  Allow inbound TCP 22 from anywhere (0.0.0.0/0) for CI deploys,"
+            echo "::error::  or GitHub Actions runners will be blocked (they use random cloud IPs)."
+            exit 1
+          fi
+
+          echo "▶ Testing SSH login..."
+          if run_remote "echo deploy-ssh-ok" | grep -q deploy-ssh-ok; then
+            echo "  ✔ SSH login successful — VPS is ready for deploy"
+          else
+            echo "::error::SSH login to ${SSH_USER}@${SSH_HOST} failed."
+            echo "::error::IP reachability is OK — check SSH_PASSWORD (or SSH_PRIVATE_KEY) in org/repo secrets."
+            exit 1
+          fi
+
+      - name: Checkout deployment config
+        uses: actions/checkout@v4
+        with:
+          repository: novasafe-org/novasafe-deployment
+          ref: master
+          path: deployment-config
+
+      - name: Upload bootstrap scripts to VPS
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo ""
+          echo "━━━ Upload bootstrap scripts ━━━"
+
+          SCRIPT_SRC="deployment-config/opt/novasafe-deployment/scripts"
+
+          if [ ! -f "${SCRIPT_SRC}/initial-setup.sh" ]; then
+            echo "::error::${SCRIPT_SRC}/initial-setup.sh not found in checkout."
+            echo "::error::Push opt/novasafe-deployment/scripts/ to the master branch first."
+            ls -la "${SCRIPT_SRC}" 2>/dev/null || ls -la deployment-config/opt/novasafe-deployment/ || true
+            exit 1
+          fi
+
+          echo "  Local scripts:"
+          ls -la "${SCRIPT_SRC}/"
+          ls -la "${SCRIPT_SRC}/lib/" 2>/dev/null || true
+
+          run_scp() {
+            local src="$1"
+            local dest="$2"
+            if [ "${USE_SSH_KEY}" = true ] && [ -f ~/.ssh/deploy_key ]; then
+              scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$src" "${SSH_USER}@${SSH_HOST}:${dest}"
+            else
+              sshpass -p "${SSH_PASSWORD}" scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$src" "${SSH_USER}@${SSH_HOST}:${dest}"
+            fi
+          }
+
+          run_remote() {
+            if [ "${USE_SSH_KEY}" = true ] && [ -f ~/.ssh/deploy_key ]; then
+              ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 "${SSH_USER}@${SSH_HOST}" "$@"
+            else
+              sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 "${SSH_USER}@${SSH_HOST}" "$@"
+            fi
+          }
+
+          run_remote "rm -rf /tmp/novasafe-scripts && mkdir -p /tmp/novasafe-scripts/lib"
+          run_scp "${SCRIPT_SRC}/initial-setup.sh" "/tmp/novasafe-scripts/initial-setup.sh"
+          run_scp "${SCRIPT_SRC}/first-boot.sh" "/tmp/novasafe-scripts/first-boot.sh"
+          run_scp "${SCRIPT_SRC}/sync-deployment-repo.sh" "/tmp/novasafe-scripts/sync-deployment-repo.sh"
+          run_scp "${SCRIPT_SRC}/lib/logging.sh" "/tmp/novasafe-scripts/lib/logging.sh"
+          run_scp "${SCRIPT_SRC}/lib/common.sh" "/tmp/novasafe-scripts/lib/common.sh"
+          run_remote "chmod +x /tmp/novasafe-scripts/*.sh /tmp/novasafe-scripts/lib/*.sh"
+
+          echo "  Remote scripts:"
+          run_remote "ls -la /tmp/novasafe-scripts/ /tmp/novasafe-scripts/lib/"
+          echo "  ✔ Scripts uploaded to /tmp/novasafe-scripts/"
+
+      - name: Deploy on VPS
+        env:
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          SERVICE: ${{ inputs.service }}
+          SYNC_CONFIG: ${{ inputs.sync_config }}
+          GIT_SHA: ${{ inputs.git_sha }}
+          DEPLOY_BRANCH: ${{ inputs.deploy_branch }}
+          SKIP_IMAGE_PULL: ${{ inputs.skip_image_pull }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          DEPLOY_REPO_PATH="${DEPLOY_REPO_PATH:-/opt/novasafe-deployment-repo}"
+
+          run_remote() {
+            if [ "${USE_SSH_KEY:-false}" = true ] && [ -f ~/.ssh/deploy_key ]; then
+              ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 "${SSH_USER}@${SSH_HOST}" "$@"
+            else
+              sshpass -p "${SSH_PASSWORD}" ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 "${SSH_USER}@${SSH_HOST}" "$@"
+            fi
+          }
+
+          echo ""
+          echo "━━━ Remote execution ━━━"
+          echo "  Host : ${SSH_USER}@${SSH_HOST}"
+          echo "  Path : ${DEPLOY_PATH}"
+          echo ""
+
+          # Stream remote output live for readable GitHub Actions logs
+          run_remote bash -s <<REMOTE_EOF
+            set -euo pipefail
+            export NS_LOG_COLOR=yes
+
+            export NOVASAFE_DEPLOY_PATH="${DEPLOY_PATH}"
+            export NOVASAFE_DEPLOY_REPO="${DEPLOY_REPO_PATH}"
+            export NOVASAFE_DEPLOY_BRANCH="${DEPLOY_BRANCH}"
+            export NOVASAFE_SKIP_IMAGE_PULL="${SKIP_IMAGE_PULL}"
+            if [ -n "${GHCR_READ_TOKEN:-}" ]; then
+              export GHCR_TOKEN="${GHCR_READ_TOKEN}"
+            else
+              export GHCR_TOKEN="${GITHUB_TOKEN}"
+            fi
+            export GHCR_USER="${GITHUB_ACTOR}"
+
+            DEPLOY_SCRIPT="${DEPLOY_PATH}/deploy.sh"
+            SETUP_SCRIPT="/tmp/novasafe-scripts/initial-setup.sh"
+            SYNC_SCRIPT="/tmp/novasafe-scripts/sync-deployment-repo.sh"
+            BOOT_REPO="/tmp/novasafe-deployment-bootstrap"
+
+            run_git_sync() {
+              if [ -f "\${SYNC_SCRIPT}" ]; then
+                echo ""
+                echo "━━━ Fetch latest deployment repo (CI) ━━━"
+                export NOVASAFE_EXPECTED_SHA="${GIT_SHA}"
+                export NOVASAFE_STRICT_SHA="true"
+                bash "\${SYNC_SCRIPT}"
+                return 0
+              fi
+
+              echo "  ⚠ sync-deployment-repo.sh missing — falling back to deploy.sh sync"
+              if [ -f "\${DEPLOY_SCRIPT}" ]; then
+                export NOVASAFE_EXPECTED_SHA="${GIT_SHA}"
+                export NOVASAFE_STRICT_SHA="true"
+                "\${DEPLOY_SCRIPT}" sync
+                return 0
+              fi
+
+              return 1
+            }
+
+            resolve_setup_script() {
+              if [ -f "\${SETUP_SCRIPT}" ]; then
+                return 0
+              fi
+              echo "  ⚠ Scripts missing in /tmp — cloning deployment repo as fallback"
+              rm -rf "\${BOOT_REPO}"
+              git clone --depth 1 https://github.com/novasafe-org/novasafe-deployment.git "\${BOOT_REPO}"
+              SETUP_SCRIPT="\${BOOT_REPO}/opt/novasafe-deployment/scripts/initial-setup.sh"
+              export SETUP_SCRIPT
+              if [ ! -f "\${SETUP_SCRIPT}" ]; then
+                echo "  ✖ initial-setup.sh still not found after git clone"
+                return 1
+              fi
+            }
+
+            echo ""
+            echo "╔══════════════════════════════════════════════════════════════╗"
+            echo "║              VPS — Deploy Pipeline                           ║"
+            echo "╚══════════════════════════════════════════════════════════════╝"
+            echo "  Server time (UTC) : \$(date -u '+%Y-%m-%d %H:%M:%S')"
+            echo "  Deploy path       : ${DEPLOY_PATH}"
+            echo "  Target service    : ${SERVICE}"
+            echo "  Pipeline commit   : ${GIT_SHA:-n/a}"
+            echo ""
+
+            # ── Always fetch + hard-reset deployment repo before anything else ─
+            if [ "${SYNC_CONFIG}" = "true" ]; then
+              if ! run_git_sync; then
+                echo "━━━ Fresh server detected — bootstrap required ━━━"
+                resolve_setup_script || exit 1
+                bash "\${SETUP_SCRIPT}"
+              fi
+            fi
+
+            # ── Fresh server: no deploy.sh yet ──────────────────────────────
+            if [ ! -f "\${DEPLOY_SCRIPT}" ]; then
+              echo "━━━ Fresh server detected ━━━"
+              echo "  ⚠ deploy.sh not found — running initial-setup.sh"
+              resolve_setup_script || exit 1
+              bash "\${SETUP_SCRIPT}"
+              echo "  ✔ Initial setup finished"
+            else
+              echo "  ✔ deploy.sh found — server already bootstrapped"
+            fi
+
+            chmod +x "\${DEPLOY_SCRIPT}" 2>/dev/null || true
+
+            if [ "${SERVICE}" = "sync" ] && [ ! -f "\${DEPLOY_SCRIPT}" ]; then
+              echo ""
+              echo "━━━ Sync service on fresh server ━━━"
+              resolve_setup_script || exit 1
+              bash "\${SETUP_SCRIPT}"
+            fi
+
+            # ── Ensure ready (initial-setup + first-boot if needed) ───────
+            echo ""
+            echo "━━━ Pre-flight checks ━━━"
+            if grep -q 'ensure-ready)' "\${DEPLOY_SCRIPT}"; then
+              "\${DEPLOY_SCRIPT}" ensure-ready
+              echo "  ✔ ensure-ready completed"
+            elif [ -f "/tmp/novasafe-scripts/initial-setup.sh" ]; then
+              echo "  ⚠ Old deploy.sh — running bootstrap scripts from /tmp"
+              bash "/tmp/novasafe-scripts/initial-setup.sh"
+              bash "/tmp/novasafe-scripts/first-boot.sh" || true
+            else
+              echo "  ✖ ensure-ready not available and no bootstrap scripts found"
+              exit 1
+            fi
+
+            # ── Deploy target service ─────────────────────────────────────
+            if [ "${SERVICE}" = "sync" ]; then
+              echo ""
+              echo "━━━ Sync-only deploy ━━━"
+              run_git_sync || "\${DEPLOY_SCRIPT}" sync
+            else
+              echo ""
+              echo "━━━ Deploy service: ${SERVICE} ━━━"
+              NOVASAFE_SKIP_SYNC=true "\${DEPLOY_SCRIPT}" "${SERVICE}"
+            fi
+
+            echo ""
+            echo "━━━ Post-deploy status ━━━"
+            docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null || true
+
+            echo ""
+            echo "╔══════════════════════════════════════════════════════════════╗"
+            echo "║  ✔ Remote deploy completed — ${SERVICE}                        "
+            echo "╚══════════════════════════════════════════════════════════════╝"
+          REMOTE_EOF
+
+          echo ""
+          echo "╔══════════════════════════════════════════════════════════════╗"
+          echo "║  ✔ GitHub Actions deploy job finished successfully           ║"
+          echo "╚══════════════════════════════════════════════════════════════╝"

@@ -1,0 +1,20 @@
+// mobile-api — winston daily rotate: app-YYYY-MM-DD.log
+// local.file_match expands globs; loki.source.file must receive concrete file paths.
+
+local.file_match "mobile_api_logs" {
+  path_targets = [
+    {
+      __path__      = "/var/log/novasafe/mobile-api/app-*.log",
+      job           = "novasafe",
+      service       = "mobile-api",
+      environment   = coalesce(sys.env("ENVIRONMENT"), "production"),
+    },
+  ]
+
+  sync_period = "5s"
+}
+
+loki.source.file "mobile_api" {
+  targets    = local.file_match.mobile_api_logs.targets
+  forward_to = [loki.process.app_logs.receiver]
+}

@@ -1,0 +1,190 @@
+# Reusable — semver bump, changelog, tag, and GitHub Release when a ticket PR merges.
+# Version bump is derived from issue/PR labels (type:feature, type:fix, etc.) — NOT commit messages.
+
+name: Release on merge
+
+on:
+  workflow_call:
+    inputs:
+      package-json:
+        description: Path to package.json (semver source)
+        required: false
+        type: string
+        default: package.json
+      changelog-path:
+        description: Path to CHANGELOG.md
+        required: false
+        type: string
+        default: CHANGELOG.md
+      manifest-path:
+        description: Optional manifest JSON path to keep in sync
+        required: false
+        type: string
+        default: .release-please-manifest.json
+      manifest-key:
+        description: Key inside manifest JSON (use "." for root package)
+        required: false
+        type: string
+        default: "."
+      default_branch:
+        description: Base branch
+        required: false
+        type: string
+        default: main
+
+permissions:
+  contents: write
+  pull-requests: read
+  issues: read
+
+jobs:
+  release:
+    if: github.event.pull_request.merged == true && !contains(github.event.pull_request.title, '[skip release]')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Collect labels from PR and linked issues
+        id: meta
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const { owner, repo } = context.repo;
+            const labels = new Set(pr.labels.map((l) => l.name));
+
+            const query = `
+              query ($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  pullRequest(number: $number) {
+                    closingIssuesReferences(first: 20) {
+                      nodes { number title labels(first: 20) { nodes { name } } }
+                    }
+                  }
+                }
+              }`;
+            const result = await github.graphql(query, {
+              owner,
+              repo,
+              number: pr.number,
+            });
+            const issues = result.repository.pullRequest.closingIssuesReferences.nodes;
+            const issueLines = [];
+            for (const issue of issues) {
+              issueLines.push(`#${issue.number} ${issue.title}`);
+              for (const label of issue.labels.nodes) labels.add(label.name);
+            }
+
+            const labelList = [...labels].join('\n');
+            core.setOutput('labels', labelList);
+            core.setOutput('issue_summary', issueLines.join('; ') || pr.title);
+            core.info(`Labels for bump resolution:\n${labelList}`);
+
+      - name: Resolve semver bump
+        id: bump
+        uses: novasafe-org/novasafe-deployment/.github/actions/resolve-bump-type@master
+        with:
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Skip — no releasable ticket type
+        if: steps.bump.outputs.bump == 'skip'
+        run: echo "No version bump (add type:feature / type:fix to the ticket). Deploy may still run."
+
+      - uses: actions/checkout@v4
+        if: steps.bump.outputs.bump != 'skip'
+        with:
+          ref: ${{ inputs.default_branch }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/checkout@v4
+        if: steps.bump.outputs.bump != 'skip'
+        with:
+          repository: novasafe-org/novasafe-deployment
+          path: .novasafe-tooling
+          ref: master
+
+      - name: Bump version & changelog
+        if: steps.bump.outputs.bump != 'skip'
+        id: version
+        env:
+          BUMP: ${{ steps.bump.outputs.bump }}
+          SECTION: ${{ steps.bump.outputs.section }}
+          MESSAGE: ${{ steps.meta.outputs.issue_summary }}
+          PKG: ${{ inputs.package-json }}
+          CHANGELOG: ${{ inputs.changelog-path }}
+          MANIFEST: ${{ inputs.manifest-path }}
+          MANIFEST_KEY: ${{ inputs.manifest-key }}
+        run: |
+          set -euo pipefail
+          BEFORE=$(node -p "require('./$PKG').version")
+          node .novasafe-tooling/scripts/versioning/bump-version.mjs "$BUMP" --package "$PKG"
+          AFTER=$(node -p "require('./$PKG').version")
+          export AFTER
+          node .novasafe-tooling/scripts/versioning/append-changelog.mjs \
+            --version "$AFTER" \
+            --section "$SECTION" \
+            --message "$MESSAGE" \
+            --file "$CHANGELOG"
+          if [ -f "$MANIFEST" ]; then
+            node -e "
+              const fs = require('fs');
+              const data = JSON.parse(fs.readFileSync(process.env.MANIFEST, 'utf8'));
+              const key = process.env.MANIFEST_KEY;
+              if (key === '.') data['.'] = process.env.AFTER;
+              else data[key] = process.env.AFTER;
+              fs.writeFileSync(process.env.MANIFEST, JSON.stringify(data, null, 2) + '\n');
+            "
+          fi
+          echo "previous=$BEFORE" >> "$GITHUB_OUTPUT"
+          echo "next=$AFTER" >> "$GITHUB_OUTPUT"
+
+      - name: Commit release
+        if: steps.bump.outputs.bump != 'skip'
+        id: commit
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${{ inputs.package-json }}" "${{ inputs.changelog-path }}"
+          if [ -f "${{ inputs.manifest-path }}" ]; then git add "${{ inputs.manifest-path }}"; fi
+          NEXT="${{ steps.version.outputs.next }}"
+          git commit -m "chore(release): v${NEXT} [skip release]"
+          git push
+          SHA=$(git rev-parse HEAD)
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag & GitHub Release
+        if: steps.bump.outputs.bump != 'skip'
+        uses: actions/github-script@v7
+        env:
+          VERSION: ${{ steps.commit.outputs.next }}
+          SHA: ${{ steps.commit.outputs.sha }}
+          SECTION: ${{ steps.bump.outputs.section }}
+          MESSAGE: ${{ steps.meta.outputs.issue_summary }}
+        with:
+          script: |
+            const version = process.env.VERSION;
+            const tag = `v${version}`;
+            const sha = process.env.SHA;
+            const { owner, repo } = context.repo;
+
+            await github.rest.git.createRef({
+              owner,
+              repo,
+              ref: `refs/tags/${tag}`,
+              sha,
+            }).catch((err) => {
+              if (err.status !== 422) throw err;
+              core.info(`Tag ${tag} already exists`);
+            });
+
+            await github.rest.repos.createRelease({
+              owner,
+              repo,
+              tag_name: tag,
+              target_commitish: sha,
+              name: tag,
+              body: `### ${process.env.SECTION}\n\n${process.env.MESSAGE}`,
+            }).catch((err) => {
+              if (err.status !== 422) throw err;
+              core.info(`Release ${tag} already exists`);
+            });

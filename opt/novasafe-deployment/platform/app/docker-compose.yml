@@ -1,0 +1,54 @@
+version: "3.9"
+
+# NovaSafe App (app.novasafe.io) — SSR Node service.
+#
+# All public `VITE_*` and server-only `AUTH_COOKIE_*` values are read from
+# `.env` next to this file at runtime. CI does not inject env into the image build.
+#
+# Cluster-wide port plan:
+#   landing → 3100
+#   auth    → 3101
+#   app     → 3102  (this service)
+
+services:
+
+  app:
+    image: ghcr.io/novasafe-org/novasafe-app-v2:latest
+    container_name: novasafe-app
+
+    env_file:
+      - .env
+
+    environment:
+      NODE_ENV: production
+      PORT: "3102"
+      HOSTNAME: 0.0.0.0
+      NODE_OPTIONS: "--max-old-space-size=448"
+
+    mem_limit: 512m
+    memswap_limit: 512m
+
+    ports:
+      - "127.0.0.1:3102:3102"
+
+    networks:
+      - novasafe-network
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --spider --method=HEAD http://localhost:3102/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  novasafe-network:
+    external: true

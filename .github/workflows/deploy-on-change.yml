@@ -1,0 +1,161 @@
+# When deployment config changes, deploy only the affected services.
+
+name: Deploy Changed Services
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'opt/novasafe-deployment/**'
+      - '.github/workflows/deploy-service.yml'
+      - '.github/workflows/deploy-on-change.yml'
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+      deploy_services: ${{ steps.matrix.outputs.services }}
+    steps:
+      - name: "━━━ Detect changed services ━━━"
+        run: |
+          echo ""
+          echo "╔══════════════════════════════════════════════════════════════╗"
+          echo "║         Deployment repo — detect changed paths               ║"
+          echo "╚══════════════════════════════════════════════════════════════╝"
+          echo "  Commit : ${{ github.sha }}"
+          echo "──────────────────────────────────────────────────────────────"
+
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            landing:
+              - 'opt/novasafe-deployment/marketing/landing/**'
+            mobile-landing:
+              - 'opt/novasafe-deployment/marketing/mobile-landing/**'
+            auth:
+              - 'opt/novasafe-deployment/platform/auth/**'
+            app:
+              - 'opt/novasafe-deployment/platform/app/**'
+            mobile-api:
+              - 'opt/novasafe-deployment/mobile-api/**'
+            admin-api:
+              - 'opt/novasafe-deployment/platform/admin-api/**'
+            observability:
+              - 'opt/novasafe-deployment/infra/observability/**'
+            nginx:
+              - 'opt/novasafe-deployment/infra/nginx/**'
+            sync:
+              - 'opt/novasafe-deployment/deploy.sh'
+              - '.github/workflows/deploy-service.yml'
+              - '.github/workflows/deploy-on-change.yml'
+          list-files: none
+
+      - name: "━━━ Services to deploy ━━━"
+        run: |
+          CHANGES='${{ steps.filter.outputs.changes }}'
+          echo "  Changed services : ${CHANGES}"
+          if [ "${CHANGES}" = "[]" ]; then
+            echo ""
+            echo "  ℹ No service config changed — deploy matrix will be skipped."
+            echo "  ℹ This is normal for commits that only touch docs or unrelated files."
+            echo "  ℹ Workflow-only commits run 'sync' to refresh deploy.sh on the VPS."
+          fi
+          echo "──────────────────────────────────────────────────────────────"
+
+      - name: "━━━ Deploy matrix (exclude sync) ━━━"
+        id: matrix
+        run: |
+          CHANGES='${{ steps.filter.outputs.changes }}'
+          FILTERED=$(echo "${CHANGES}" | jq -c '[.[] | select(. != "sync")]')
+          echo "services=${FILTERED}" >> "${GITHUB_OUTPUT}"
+          echo "  Deploy services (after sync): ${FILTERED}"
+
+      - name: Validate deploy secrets
+        run: |
+          set -euo pipefail
+          trim() { printf '%s' "$1" | tr -d '[:space:]'; }
+
+          missing=0
+          for name in SSH_USER SSH_HOST SSH_PASSWORD DEPLOY_PATH; do
+            val="$(trim "${!name:-}")"
+            if [ -z "${val}" ]; then
+              echo "::error::Missing secret: ${name}"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "::error::Add org secrets with access to novasafe-deployment."
+            echo "::error::If other repos work but this one fails, check novasafe-deployment → Settings → Secrets"
+            echo "::error::for REPO-LEVEL secrets that override org (especially SSH_PRIVATE_KEY or wrong SSH_HOST)."
+            exit 1
+          fi
+
+          SSH_HOST="$(trim "${SSH_HOST}")"
+          if ! printf '%s' "${SSH_HOST}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::warning::SSH_HOST is not IPv4 on novasafe-deployment — expected e.g. 69.62.74.79"
+          else
+            echo "  OK SSH_HOST looks like a valid IPv4 address"
+          fi
+
+          if [ -n "${SSH_PRIVATE_KEY:-}" ] && ! printf '%s' "${SSH_PRIVATE_KEY}" | grep -q 'BEGIN.*PRIVATE KEY'; then
+            echo "::warning::SSH_PRIVATE_KEY is set on novasafe-deployment but is not a valid PEM key."
+            echo "::warning::Delete it from repo secrets if you use password auth (other repos may not have this secret)."
+          fi
+
+          echo "  OK All required deploy secrets are set on novasafe-deployment"
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+  sync:
+    needs: detect
+    if: needs.detect.outputs.services != '[]'
+    uses: ./.github/workflows/deploy-service.yml
+    with:
+      service: sync
+      sync_config: true
+      git_sha: ${{ github.sha }}
+      deploy_branch: ${{ github.ref_name }}
+      caller_repo: ${{ github.repository }}
+      caller_ref: ${{ github.ref_name }}@${{ github.sha }}
+    secrets:
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_REPO_PATH: ${{ secrets.DEPLOY_REPO_PATH }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+  deploy:
+    needs: [detect, sync]
+    if: needs.detect.outputs.deploy_services != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        service: ${{ fromJson(needs.detect.outputs.deploy_services) }}
+    uses: ./.github/workflows/deploy-service.yml
+    with:
+      service: ${{ matrix.service }}
+      sync_config: true
+      git_sha: ${{ github.sha }}
+      deploy_branch: ${{ github.ref_name }}
+      caller_repo: ${{ github.repository }}
+      caller_ref: ${{ github.ref_name }}@${{ github.sha }}
+      skip_image_pull: true
+    secrets:
+      SSH_USER: ${{ secrets.SSH_USER }}
+      SSH_HOST: ${{ secrets.SSH_HOST }}
+      SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_REPO_PATH: ${{ secrets.DEPLOY_REPO_PATH }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}

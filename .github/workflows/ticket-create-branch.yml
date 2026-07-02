@@ -1,0 +1,144 @@
+# Reusable — create a branch + draft PR when a ticket moves to "In Progress".
+#
+# Trigger from app repos when issue is labeled `status:in-progress`
+# (configure GitHub Projects automation to add that label on column move).
+
+name: Ticket — create branch & PR
+
+on:
+  workflow_call:
+    inputs:
+      issue_number:
+        description: GitHub issue number
+        required: true
+        type: number
+      default_branch:
+        description: Base branch
+        required: false
+        type: string
+        default: main
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  ticket-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.default_branch }}
+          fetch-depth: 0
+
+      - name: Create branch and draft PR
+        id: ticket
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = ${{ inputs.issue_number }};
+            const base = '${{ inputs.default_branch }}';
+            const { owner, repo } = context.repo;
+
+            const { data: issue } = await github.rest.issues.get({
+              owner,
+              repo,
+              issue_number: issueNumber,
+            });
+
+            const slug = issue.title
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-|-$/g, '')
+              .slice(0, 48) || 'ticket';
+            const branch = `ticket/${issueNumber}-${slug}`;
+
+            const { data: baseRef } = await github.rest.git.getRef({
+              owner,
+              repo,
+              ref: `heads/${base}`,
+            });
+
+            let branchCreated = false;
+            try {
+              await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
+              core.info(`Branch already exists: ${branch}`);
+            } catch (err) {
+              if (err.status !== 404) throw err;
+              await github.rest.git.createRef({
+                owner,
+                repo,
+                ref: `refs/heads/${branch}`,
+                sha: baseRef.object.sha,
+              });
+              branchCreated = true;
+              core.info(`Created branch ${branch}`);
+            }
+
+            const typeLabels = issue.labels
+              .map((l) => l.name)
+              .filter((n) => n.startsWith('type:') || n.startsWith('semver:'));
+
+            const prs = await github.rest.pulls.list({
+              owner,
+              repo,
+              head: `${owner}:${branch}`,
+              state: 'open',
+            });
+
+            let prNumber;
+            if (prs.data.length) {
+              prNumber = prs.data[0].number;
+              core.info(`Open PR already exists: #${prNumber}`);
+            } else {
+              const { data: pr } = await github.rest.pulls.create({
+                owner,
+                repo,
+                title: `[#${issueNumber}] ${issue.title}`,
+                head: branch,
+                base,
+                draft: true,
+                body: [
+                  `Closes #${issueNumber}`,
+                  '',
+                  '---',
+                  '_Auto-created from GitHub Project ticket workflow._',
+                  '',
+                  issue.body || '',
+                ].join('\n'),
+              });
+              prNumber = pr.number;
+
+              if (typeLabels.length) {
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: prNumber,
+                  labels: typeLabels,
+                });
+              }
+            }
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issueNumber,
+              body: [
+                '🤖 **Ticket automation**',
+                '',
+                `- Branch: \`${branch}\`${branchCreated ? ' _(created)_' : ''}`,
+                `- Draft PR: #${prNumber}`,
+                '',
+                'Check out the branch locally:',
+                '```bash',
+                `git fetch origin ${branch}`,
+                `git checkout ${branch}`,
+                '```',
+              ].join('\n'),
+            });
+
+            return { branch, prNumber };
+
+      - name: Summary
+        run: echo "Ticket branch/PR workflow complete for issue #${{ inputs.issue_number }}"

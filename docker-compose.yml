@@ -1,0 +1,81 @@
+version: "3.9"
+
+services:
+  nginx:
+    image: nginx:alpine
+    pull_policy: always
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d
+      - ./nginx/cloudflare:/etc/nginx/cloudflare
+    depends_on:
+      - landing
+      - auth
+      - app
+      - backend
+    restart: unless-stopped
+
+  # Marketing site - novasafe.io (SEO, no auth). Built by novasafe-landing repo workflow.
+  landing:
+    image: ghcr.io/novasafe-org/novasafe-landing:latest
+    pull_policy: always
+    container_name: landing
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Auth / onboarding - start.novasafe.io (login, signup, onboarding only). Built by novasafe-auth repo workflow.
+  auth:
+    image: ghcr.io/novasafe-org/novasafe-auth:latest
+    pull_policy: always
+    container_name: auth
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Main app - app.novasafe.io and *.novasafe.io (vault, dashboard). Built by novasafe-app repo workflow.
+  app:
+    image: ghcr.io/novasafe-org/novasafe-app:latest
+    pull_policy: always
+    container_name: app
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Backend: only reachable via nginx /api (no public port)
+  backend:
+    image: ghcr.io/novasafe-org/novasafe-backend:latest
+    pull_policy: always
+    container_name: vault-backend
+    expose:
+      - "3123"
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3123/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
