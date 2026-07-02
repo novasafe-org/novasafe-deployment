@@ -1,0 +1,12 @@
+{
+  "platform": "1.1.0",
+  "epic": "NS-55",
+  "releasedAt": "2026-07-02",
+  "components": {
+    "novasafe-app-v2": "1.1.0",
+    "novasafe-auth-v2": "1.1.0",
+    "novasafe-landing-v2": "1.1.0",
+    "novasafe-mobile-api": "1.1.0",
+    "novasafe-admin-api": "1.1.0"
+  }
+}

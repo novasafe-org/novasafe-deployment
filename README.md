@@ -105,6 +105,8 @@ cd /opt/novasafe-deployment
 | Doc | Contents |
 |---|---|
 | **[DEPLOYMENT.md](./DEPLOYMENT.md)** | Architecture, flows, workflows, scripts, troubleshooting |
+| [platform-versions.json](./platform-versions.json) | Pinned component versions per platform release |
+| [docs/versioning.md](./docs/versioning.md) | Semver and release workflow |
 | [CERTIFICATE_SETUP.md](./CERTIFICATE_SETUP.md) | TLS setup |
 | [RUN_LOCALLY_AND_PROD.md](./RUN_LOCALLY_AND_PROD.md) | Local dev vs prod |
 | [MOBILE_API_DOMAIN.md](./MOBILE_API_DOMAIN.md) | Mobile API routing |
