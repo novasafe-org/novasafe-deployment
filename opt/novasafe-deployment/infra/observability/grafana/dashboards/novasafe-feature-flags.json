@@ -1,0 +1,70 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "NovaSafe feature flag resolution — mobile-api platform endpoint and admin audit events.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "sum by (status) (count_over_time({job=\"novasafe\", path=\"/api/v1/platform/feature-flags\"} [$__interval]))",
+          "refId": "A"
+        }
+      ],
+      "title": "Feature flags endpoint volume by status",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "sum(count_over_time({job=\"novasafe\", path=\"/api/v1/platform/feature-flags\", status=\"304\"} [$__interval]))",
+          "refId": "A"
+        }
+      ],
+      "title": "ETag cache hits (304 responses)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "{job=\"novasafe\", log_type=\"audit\", message=\"Feature flag changed\"} | json | environment=\"production\" | tier=\"enterprise\" | newEnabled=\"true\" | approvalNote=\"\"",
+          "refId": "A"
+        }
+      ],
+      "title": "Production enterprise enables without approval note (alert candidate)",
+      "type": "logs"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["novasafe", "feature-flags"],
+  "templating": {
+    "list": [
+      {
+        "current": { "text": "Loki", "value": "Loki" },
+        "hide": 0,
+        "name": "datasource",
+        "options": [],
+        "query": "loki",
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "NovaSafe Feature Flags",
+  "uid": "novasafe-feature-flags",
+  "version": 1
+}
