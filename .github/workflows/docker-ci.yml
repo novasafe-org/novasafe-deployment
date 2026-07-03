@@ -92,7 +92,7 @@ jobs:
 
       - name: Build image (local, versioned)
         if: inputs.use_version_action
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
@@ -111,7 +111,7 @@ jobs:
 
       - name: Build image (local)
         if: ${{ !inputs.use_version_action }}
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
@@ -132,7 +132,7 @@ jobs:
 
       - name: Push image (versioned)
         if: github.event_name == 'push' && inputs.use_version_action
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
@@ -153,7 +153,7 @@ jobs:
 
       - name: Push image
         if: github.event_name == 'push' && !inputs.use_version_action
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Dockerfile
