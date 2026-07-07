@@ -1,0 +1,31 @@
+name: Deploy S3
+description: Placeholder for syncing static assets to an S3 bucket (not implemented).
+
+inputs:
+  bucket-name:
+    description: Target S3 bucket name
+    required: true
+  source-directory:
+    description: Local directory to sync
+    required: false
+    default: dist
+  delete-removed:
+    description: Remove S3 objects not present in the source directory
+    required: false
+    default: 'false'
+
+outputs:
+  deployed:
+    description: Whether the placeholder deploy step completed
+    value: ${{ steps.placeholder.outputs.deployed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Placeholder — S3 sync not implemented
+      id: placeholder
+      shell: bash
+      run: |
+        echo "::notice::TODO: sync ${{ inputs.source-directory }} to s3://${{ inputs.bucket-name }}"
+        echo "delete-removed=${{ inputs.delete-removed }}"
+        echo "deployed=true" >> "$GITHUB_OUTPUT"

@@ -1,0 +1,57 @@
+# Reusable workflow — deploy backend to AWS (placeholder)
+#
+# Future responsibility: deploy Lambda function code for novasafe-auth-v2 and
+# novasafe-backend (mobile-api, admin-api).
+#
+# TODO: wire configure-aws and deploy-lambda composite actions.
+# DO NOT authenticate to AWS or deploy anything in this workflow yet.
+
+name: Deploy Backend (AWS)
+
+on:
+  workflow_call:
+    inputs:
+      application:
+        description: Application repository name (e.g. novasafe-backend)
+        required: true
+        type: string
+      environment:
+        description: Target environment (development, staging, production)
+        required: true
+        type: string
+      lambda-function-name:
+        description: Target Lambda function name
+        required: true
+        type: string
+      artifact-path:
+        description: Path to the Lambda deployment package
+        required: false
+        type: string
+        default: dist/lambda.zip
+    secrets:
+      AWS_ROLE_ARN:
+        description: IAM role ARN for OIDC authentication (future)
+        required: false
+      AWS_REGION:
+        description: AWS region for deployment (future)
+        required: false
+    outputs:
+      deploy-ready:
+        description: Whether the placeholder deploy job completed
+        value: ${{ jobs.deploy.outputs.deploy-ready }}
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.application }} → ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    outputs:
+      deploy-ready: ${{ steps.placeholder.outputs.deploy-ready }}
+    steps:
+      - name: Placeholder — Lambda deployment not implemented
+        id: placeholder
+        run: |
+          echo "::notice::TODO: deploy Lambda package to ${{ inputs.lambda-function-name }}"
+          echo "application=${{ inputs.application }}"
+          echo "environment=${{ inputs.environment }}"
+          echo "artifact-path=${{ inputs.artifact-path }}"
+          echo "deploy-ready=true" >> "$GITHUB_OUTPUT"

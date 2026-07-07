@@ -1,0 +1,51 @@
+# Reusable workflow — build frontend (placeholder)
+#
+# Future responsibility: install dependencies, run tests, and produce a static
+# build artifact for S3 deployment (novasafe-landing-v2, novasafe-app-v2).
+#
+# TODO: implement build steps, artifact upload, and caching.
+# DO NOT authenticate to AWS in this workflow yet.
+
+name: Build Frontend (AWS)
+
+on:
+  workflow_call:
+    inputs:
+      application:
+        description: Application repository name (e.g. novasafe-landing-v2)
+        required: true
+        type: string
+      environment:
+        description: Target environment (development, staging, production)
+        required: true
+        type: string
+      node-version:
+        description: Node.js version for the build
+        required: false
+        type: string
+        default: '22'
+      working-directory:
+        description: Path to the frontend project root
+        required: false
+        type: string
+        default: '.'
+    outputs:
+      build-ready:
+        description: Whether the placeholder build job completed
+        value: ${{ jobs.build.outputs.build-ready }}
+
+jobs:
+  build:
+    name: Build ${{ inputs.application }} (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    outputs:
+      build-ready: ${{ steps.placeholder.outputs.build-ready }}
+    steps:
+      - name: Placeholder — checkout and build not implemented
+        id: placeholder
+        run: |
+          echo "::notice::TODO: checkout, install, test, and build frontend for ${{ inputs.application }}"
+          echo "environment=${{ inputs.environment }}"
+          echo "node-version=${{ inputs.node-version }}"
+          echo "working-directory=${{ inputs.working-directory }}"
+          echo "build-ready=true" >> "$GITHUB_OUTPUT"

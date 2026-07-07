@@ -1,0 +1,62 @@
+# Reusable workflow — deploy frontend to AWS (placeholder)
+#
+# Future responsibility: upload static assets to S3 and invalidate CloudFront
+# for novasafe-landing-v2 and novasafe-app-v2.
+#
+# TODO: wire configure-aws, deploy-s3, and invalidate-cloudfront composite actions.
+# DO NOT authenticate to AWS or deploy anything in this workflow yet.
+
+name: Deploy Frontend (AWS)
+
+on:
+  workflow_call:
+    inputs:
+      application:
+        description: Application repository name (e.g. novasafe-landing-v2)
+        required: true
+        type: string
+      environment:
+        description: Target environment (development, staging, production)
+        required: true
+        type: string
+      bucket-name:
+        description: Target S3 bucket for static assets
+        required: true
+        type: string
+      cloudfront-distribution-id:
+        description: CloudFront distribution ID to invalidate after deploy
+        required: true
+        type: string
+      source-directory:
+        description: Local directory containing built static assets
+        required: false
+        type: string
+        default: dist
+    secrets:
+      AWS_ROLE_ARN:
+        description: IAM role ARN for OIDC authentication (future)
+        required: false
+      AWS_REGION:
+        description: AWS region for deployment (future)
+        required: false
+    outputs:
+      deploy-ready:
+        description: Whether the placeholder deploy job completed
+        value: ${{ jobs.deploy.outputs.deploy-ready }}
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.application }} → ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    outputs:
+      deploy-ready: ${{ steps.placeholder.outputs.deploy-ready }}
+    steps:
+      - name: Placeholder — S3 upload and CloudFront invalidation not implemented
+        id: placeholder
+        run: |
+          echo "::notice::TODO: deploy frontend to s3://${{ inputs.bucket-name }}"
+          echo "::notice::TODO: invalidate CloudFront distribution ${{ inputs.cloudfront-distribution-id }}"
+          echo "application=${{ inputs.application }}"
+          echo "environment=${{ inputs.environment }}"
+          echo "source-directory=${{ inputs.source-directory }}"
+          echo "deploy-ready=true" >> "$GITHUB_OUTPUT"
