@@ -1,17 +1,22 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import type { NovaSafeStackProps } from '../shared/types';
+import { mergeNovaSafeStackProps } from '../shared/types';
 
 /**
- * Monitoring stack — placeholder.
+ * Monitoring stack — observability infrastructure.
  *
- * Future responsibility: observability (log groups, dashboards,
- * alarms, tracing) for serverless workloads.
+ * Future responsibility: CloudWatch log groups, dashboards, alarms, and
+ * tracing for serverless workloads.
  *
- * Intentionally creates zero AWS resources.
+ * Intentionally creates **zero** AWS resources.
  */
 export class MonitoringStack extends cdk.Stack {
-  public constructor(scope: Construct, id: string, props?: cdk.StackProps) {
-    super(scope, id, props);
-    // TODO: add observability resources
+  public constructor(scope: Construct, id: string, props: NovaSafeStackProps) {
+    super(scope, id, mergeNovaSafeStackProps(props, 'observability'));
+
+    cdk.Annotations.of(this).addInfo(
+      'Observability placeholder — no resources provisioned.',
+    );
   }
 }
