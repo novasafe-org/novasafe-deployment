@@ -1,17 +1,22 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import type { NovaSafeStackProps } from '../shared/types';
+import { mergeNovaSafeStackProps } from '../shared/types';
 
 /**
- * Security stack — placeholder.
+ * Security stack — shared security primitives.
  *
- * Future responsibility: shared security primitives (IAM baselines,
- * secrets references, KMS keys) consumed by platform and worker stacks.
+ * Future responsibility: IAM baselines, secrets references, and encryption
+ * keys consumed by platform and worker stacks.
  *
- * Intentionally creates zero AWS resources.
+ * Intentionally creates **zero** AWS resources.
  */
 export class SecurityStack extends cdk.Stack {
-  public constructor(scope: Construct, id: string, props?: cdk.StackProps) {
-    super(scope, id, props);
-    // TODO: add security resources
+  public constructor(scope: Construct, id: string, props: NovaSafeStackProps) {
+    super(scope, id, mergeNovaSafeStackProps(props, 'security'));
+
+    cdk.Annotations.of(this).addInfo(
+      'Security placeholder — no resources provisioned.',
+    );
   }
 }

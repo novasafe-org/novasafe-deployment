@@ -1,9 +1,11 @@
+import { getEnvironment } from '../lib/shared/environments';
+import { getDomainsForEnvironment } from '../lib/shared/domains';
+
 /**
- * Production environment configuration.
- *
- * TODO: account ID, region, live domain mappings, capacity limits,
- * and cutover flags for incremental migration from Docker/Nginx.
+ * Production environment configuration entry point.
+ * @todo Replace placeholder account and region before deployment.
  */
 export const productionConfig = {
-  // TODO: define production settings
+  environment: getEnvironment('production'),
+  domains: getDomainsForEnvironment(getEnvironment('production')),
 } as const;

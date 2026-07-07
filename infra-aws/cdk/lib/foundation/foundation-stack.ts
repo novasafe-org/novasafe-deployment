@@ -1,17 +1,27 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import type { NovaSafeStackProps } from '../shared/types';
+import { mergeNovaSafeStackProps } from '../shared/types';
+import { validateNovaSafeConfiguration } from '../shared/validation';
 
 /**
- * Foundation stack — placeholder.
+ * Foundation stack — global configuration anchor for NovaSafe infrastructure.
  *
- * Future responsibility: account-level baselines shared by other stacks
- * (e.g. CDK bootstrap references, shared parameters, optional networking).
+ * Validates shared environment and domain configuration at synthesis time.
+ * Future responsibility: account-level baselines (bootstrap alignment, shared
+ * parameters, optional networking) consumed by other stacks.
  *
- * Intentionally creates zero AWS resources.
+ * Intentionally creates **zero** AWS resources.
  */
 export class FoundationStack extends cdk.Stack {
-  public constructor(scope: Construct, id: string, props?: cdk.StackProps) {
-    super(scope, id, props);
-    // TODO: add foundation resources in a future implementation task
+  public constructor(scope: Construct, id: string, props: NovaSafeStackProps) {
+    super(scope, id, mergeNovaSafeStackProps(props, 'foundation'));
+
+    validateNovaSafeConfiguration(props.environment, props.domains);
+
+    cdk.Annotations.of(this).addInfo(
+      `Foundation configuration validated for ${props.environment.name}. ` +
+        'No AWS resources are provisioned in this stack yet.',
+    );
   }
 }
