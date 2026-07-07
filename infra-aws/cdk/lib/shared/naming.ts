@@ -11,7 +11,8 @@ export type StackComponent =
   | 'admin-api'
   | 'workers'
   | 'security'
-  | 'observability';
+  | 'observability'
+  | 'github-oidc';
 
 /**
  * Builds a consistent physical name segment: `{prefix}-{env}-{suffix}`.
