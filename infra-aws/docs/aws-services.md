@@ -1,12 +1,27 @@
 # AWS Services
 
-> **Placeholder** — This document will list and justify the AWS services used by NovaSafe serverless infrastructure.
+AWS services planned for NovaSafe serverless infrastructure. **No resources exist yet.**
 
-Future contents will cover:
+## In scope
 
-- Planned services (e.g. Lambda, API Gateway, S3, CloudFront, IAM, Secrets Manager)
-- Free Tier usage targets and cost guardrails for early-stage NovaSafe
-- What is explicitly out of scope or deferred to control cost
-- Service limits, regions, and tagging standards
+| Service | Planned use |
+|---------|-------------|
+| **Lambda** | API handlers, auth, background workers |
+| **API Gateway** | HTTP APIs for mobile-api, admin-api, auth |
+| **S3** | Static site assets (marketing, app shell) |
+| **CloudFront** | CDN in front of S3 and optionally API origins |
+| **CloudWatch** | Logs, metrics, alarms |
+| **IAM** | Least-privilege roles and policies |
+| **Secrets Manager** / **SSM Parameter Store** | Runtime configuration (MongoDB URIs, API keys) |
+| **SQS** / **EventBridge** | Async workers (future) |
 
-No AWS resources have been created yet.
+## Out of scope (unchanged)
+
+| System | Role |
+|--------|------|
+| **MongoDB Atlas** | Primary database |
+| **Cloudflare** | DNS, TLS termination at edge, traffic routing during migration |
+
+## Cost
+
+Early stages target **AWS Free Tier** eligibility. Service choices and limits will be documented per environment before production cutover.

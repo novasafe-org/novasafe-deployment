@@ -1,11 +1,27 @@
 # Environments
 
-> **Placeholder** — This document will define NovaSafe's AWS serverless environments.
+Three AWS deployment environments. Configuration stubs live in `cdk/config/`; environment-specific files may be added under `environments/`.
 
-Future contents will cover:
+## development
 
-- **dev** — development and experimentation; lowest cost, permissive access
-- **staging** — pre-production validation; mirrors production topology where practical
-- **production** — live serverless stack; cut over incrementally from Docker/Nginx
+- Purpose: experimentation and feature validation
+- Lowest cost; permissive access
+- May share an AWS account with staging initially
 
-Per-environment configuration will live under `environments/<name>/`. Account IDs, regions, and stack naming conventions will be documented here.
+## staging
+
+- Purpose: pre-production integration and QA
+- Mirrors production topology where practical
+- Validates migrations before live cutover
+
+## production
+
+- Purpose: live serverless traffic (after incremental migration)
+- Strict change control and monitoring
+- Docker/Nginx remains authoritative until each service is cut over
+
+## Context selection (future)
+
+CDK context flag: `-c env=development|staging|production`
+
+Account IDs, regions, and stack naming will be documented here once accounts are provisioned.

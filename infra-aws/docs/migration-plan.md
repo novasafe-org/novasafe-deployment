@@ -1,21 +1,30 @@
 # Migration Plan
 
-> **Placeholder** — This document will describe the incremental migration from Docker/Nginx to AWS Serverless.
+Gradual migration from Docker/Nginx (VPS) to AWS Serverless. Production stays on the current stack until each component is validated.
 
 ## Principles
 
-1. **Production stays on Docker/Nginx** until each migrated component is validated on the serverless path.
-2. **Incremental cutover** — migrate one service or traffic slice at a time, not a big-bang switch.
-3. **Rollback-friendly** — DNS and routing changes must be reversible via Cloudflare.
-4. **Cost-conscious** — favor AWS Free Tier–eligible choices during early stages.
+1. **No big-bang** — migrate one service or domain at a time.
+2. **Rollback via DNS** — Cloudflare record changes revert traffic quickly.
+3. **Parallel infrastructure** — build and test AWS without touching `opt/novasafe-deployment/`.
+4. **Cost-conscious** — Free Tier–friendly choices in development and early staging.
 
-## Future phases (outline)
+## Phases
 
-| Phase | Focus |
-|-------|--------|
-| 0 | Scaffold repo (`infra-aws/`), CDK bootstrap, dev environment |
-| 1 | Non-critical or internal workloads on serverless dev/staging |
-| 2 | Staging parity; integration and load testing |
-| 3 | Production cutover per service; monitor; decommission Docker only when stable |
+| Phase | Goal |
+|-------|------|
+| **0 — Scaffold** | `infra-aws/` layout, CDK skeleton, documentation (current) |
+| **1 — Foundation** | CDK bootstrap, development environment, first non-critical workload |
+| **2 — Staging parity** | All stacks in staging; integration tests against MongoDB Atlas |
+| **3 — Incremental production** | Per-domain cutover: marketing → APIs → app; monitor each step |
+| **4 — Decommission** | Retire Docker/Nginx services only when serverless path is stable |
 
-Detailed timelines, service order, and acceptance criteria for each phase will be added here as the CDK implementation progresses.
+## Suggested cutover order
+
+1. `novasafe.io` / `start.novasafe.io` (static marketing — lowest risk)
+2. `mobile-api.novasafe.io` (read-heavy API paths first)
+3. `admin-api.novasafe.io`
+4. Auth service (coordinate with app session handling)
+5. `app.novasafe.io`
+
+Detailed runbooks and acceptance criteria will be added per phase.
