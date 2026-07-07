@@ -1,27 +1,19 @@
 # Configure AWS
 
-Placeholder composite action for GitHub OIDC → AWS credential configuration.
-
-## Future responsibility
-
-- Assume an IAM role using `aws-actions/configure-aws-credentials`
-- Export `AWS_REGION` and credentials for subsequent steps
-- Support per-environment role ARNs (development, staging, production)
+Configures short-lived AWS credentials using **GitHub OIDC** (`aws-actions/configure-aws-credentials`).
 
 ## Inputs
 
 | Input | Required | Description |
 |-------|----------|-------------|
-| `aws-region` | No | AWS region (default `eu-west-1`) |
-| `role-arn` | No | IAM role ARN to assume via OIDC |
+| `aws-region` | Yes | AWS region |
+| `role-arn` | Yes | IAM role ARN from `GitHubOidcStack` |
 | `role-session-name` | No | STS session name |
 
 ## Outputs
 
 | Output | Description |
 |--------|-------------|
-| `configured` | Placeholder success flag |
+| `configured` | Success flag |
 
-## Status
-
-Not implemented. Does not authenticate to AWS.
+No GitHub Secrets or long-lived access keys are used.

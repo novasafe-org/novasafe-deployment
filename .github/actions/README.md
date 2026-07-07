@@ -1,28 +1,26 @@
 # AWS composite actions
 
-Placeholder composite actions shared by NovaSafe AWS reusable workflows.
+Composite actions shared by NovaSafe AWS reusable workflows.
 
 ## Status
 
-**Foundation only.** No AWS CLI calls, credential configuration, or deployment logic is implemented.
+| Action | Status |
+|--------|--------|
+| [`configure-aws/`](configure-aws/) | **Implemented** — GitHub OIDC via `aws-actions/configure-aws-credentials` |
+| [`deploy-s3/`](deploy-s3/) | **Implemented** — SPA-aware `aws s3 sync` with cache headers |
+| [`invalidate-cloudfront/`](invalidate-cloudfront/) | **Implemented** — `aws cloudfront create-invalidation` |
+| [`deploy-lambda/`](deploy-lambda/) | Placeholder |
 
-## Actions
+## Authentication
 
-| Action | Future responsibility |
-|--------|----------------------|
-| [`configure-aws/`](configure-aws/) | OIDC authentication and AWS CLI environment setup |
-| [`deploy-s3/`](deploy-s3/) | Sync static assets to an S3 bucket |
-| [`deploy-lambda/`](deploy-lambda/) | Update Lambda function code from a zip artifact |
-| [`invalidate-cloudfront/`](invalidate-cloudfront/) | Create CloudFront cache invalidation |
+OIDC only — no AWS access keys, no GitHub Secrets for credentials.
 
 ## Consumed by
 
-- `.github/workflows/reusable/build-frontend.yml`
-- `.github/workflows/reusable/build-backend.yml`
-- `.github/workflows/reusable/deploy-frontend-aws.yml`
-- `.github/workflows/reusable/deploy-backend-aws.yml`
+- `.github/workflows/reusable/deploy-frontend-aws.yml` (implemented)
+- `.github/workflows/reusable/deploy-backend-aws.yml` (future)
 
-Application repositories (`novasafe-landing-v2`, `novasafe-auth-v2`, `novasafe-app-v2`, `novasafe-backend`) will call the reusable workflows above; they do not reference these actions directly.
+Application repos call reusable **workflows**, not these actions directly.
 
 ## Existing actions
 
