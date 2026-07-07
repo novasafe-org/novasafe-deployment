@@ -105,6 +105,8 @@ jobs:
         if: steps.bump.outputs.bump != 'skip'
         id: version
         env:
+          # Versioning scripts live in .novasafe-tooling/ but must mutate the caller repo.
+          REPO_ROOT: ${{ github.workspace }}
           BUMP: ${{ steps.bump.outputs.bump }}
           SECTION: ${{ steps.bump.outputs.section }}
           MESSAGE: ${{ steps.meta.outputs.issue_summary }}
