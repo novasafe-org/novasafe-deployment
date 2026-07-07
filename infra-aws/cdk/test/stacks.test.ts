@@ -1,7 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { FoundationStack } from '../lib/foundation/foundation-stack';
-import { LandingStack } from '../lib/marketing/landing-stack';
 import { MonitoringStack } from '../lib/observability/monitoring-stack';
 import { AdminApiStack } from '../lib/platform/admin-api-stack';
 import { ApiStack } from '../lib/platform/api-stack';
@@ -45,7 +44,6 @@ describe('placeholder stacks', () => {
 
   it.each([
     ['FoundationStack', FoundationStack],
-    ['LandingStack', LandingStack],
     ['AuthStack', AuthStack],
     ['AppStack', AppStack],
     ['ApiStack', ApiStack],

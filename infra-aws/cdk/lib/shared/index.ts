@@ -3,6 +3,7 @@ export * from './domains';
 export * from './environments';
 export * from './github';
 export * from './naming';
+export * from './static-site';
 export * from './tags';
 export * from './types';
 export * from './validation';

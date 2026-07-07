@@ -1,27 +1,54 @@
 # AWS Services
 
-AWS services planned for NovaSafe serverless infrastructure. **No resources exist yet.**
+AWS services used and planned for NovaSafe serverless infrastructure.
 
-## In scope
+## In use
+
+| Service | Stack | Use |
+|---------|-------|-----|
+| **S3** | LandingStack | Private content bucket + CloudFront access logs |
+| **CloudFront** | LandingStack | CDN, TLS, SPA routing, compression (gzip/brotli) |
+| **ACM** | LandingStack | TLS certificate (`novasafe.io`, `www.novasafe.io`) |
+| **IAM (OIDC)** | GitHubOidcStack | GitHub Actions authentication |
+| **CloudWatch Logs** | LandingStack | Operational log group for landing CDN |
+| **CloudFormation** | CDK | All stacks |
+
+### Landing stack CloudFront policies
+
+| Policy type | Purpose |
+|-------------|---------|
+| Cache (HTML) | Minimal TTL for `index.html` / SPA shell |
+| Cache (assets) | Aggressive TTL for `/assets/*` |
+| Origin request | No cookies/query forwarding to S3 |
+| Response headers | HSTS, CSP (placeholder), frame deny, COOP/CORP |
+
+**Origin Access Control (OAC)** is used — not legacy Origin Access Identity (OAI).
+
+## Planned
 
 | Service | Planned use |
 |---------|-------------|
-| **Lambda** | API handlers, auth, background workers |
+| **Lambda** | API handlers, auth, workers |
 | **API Gateway** | HTTP APIs for mobile-api, admin-api, auth |
-| **S3** | Static site assets (marketing, app shell) |
-| **CloudFront** | CDN in front of S3 and optionally API origins |
-| **CloudWatch** | Logs, metrics, alarms |
-| **IAM** | Least-privilege roles and policies |
-| **Secrets Manager** / **SSM Parameter Store** | Runtime configuration (MongoDB URIs, API keys) |
-| **SQS** / **EventBridge** | Async workers (future) |
+| **Secrets Manager** / **SSM** | Runtime configuration |
+| **SQS** / **EventBridge** | Async workers |
 
 ## Out of scope (unchanged)
 
 | System | Role |
 |--------|------|
 | **MongoDB Atlas** | Primary database |
-| **Cloudflare** | DNS, TLS termination at edge, traffic routing during migration |
+| **Cloudflare** | DNS, optional proxy/WAF |
+| **Route53** | Not used — DNS stays in Cloudflare |
 
-## Cost
+## Free Tier considerations
 
-Early stages target **AWS Free Tier** eligibility. Service choices and limits will be documented per environment before production cutover.
+| Service | Early-stage approach |
+|---------|---------------------|
+| S3 | Versioning on; lifecycle on log bucket (90-day expiry) |
+| CloudFront | `PriceClass_100`; single distribution per site |
+| ACM | Free for CloudFront certificates |
+| CloudWatch Logs | 1-month retention on landing log group |
+| Data transfer | Monitor via CloudFront and S3 metrics |
+
+Replace placeholder AWS account IDs before deploying to real accounts.
