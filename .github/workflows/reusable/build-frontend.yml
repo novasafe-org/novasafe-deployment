@@ -29,6 +29,16 @@ on:
         required: false
         type: string
         default: '.'
+      aws-role-arn:
+        description: IAM role ARN from GitHubOidcStack (future OIDC authentication)
+        required: false
+        type: string
+        default: ''
+      aws-region:
+        description: AWS region for optional authenticated steps (future)
+        required: false
+        type: string
+        default: eu-west-1
     outputs:
       build-ready:
         description: Whether the placeholder build job completed
@@ -41,6 +51,13 @@ jobs:
     outputs:
       build-ready: ${{ steps.placeholder.outputs.build-ready }}
     steps:
+      # TODO(OIDC): Authenticate to AWS when build steps require it (e.g. pulling private artifacts).
+      # - name: Configure AWS credentials (OIDC)
+      #   uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: ${{ inputs.aws-role-arn }}
+      #     aws-region: ${{ inputs.aws-region }}
+      #     role-session-name: novasafe-${{ inputs.application }}-${{ inputs.environment }}
       - name: Placeholder — checkout and build not implemented
         id: placeholder
         run: |

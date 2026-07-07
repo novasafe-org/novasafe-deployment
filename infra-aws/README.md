@@ -62,5 +62,6 @@ The CDK app lives in [`cdk/`](cdk/). Stack modules are organized by domain:
 | [domains.md](docs/domains.md) | Domain and DNS mapping |
 | [aws-services.md](docs/aws-services.md) | AWS services in scope |
 | [github-actions.md](docs/github-actions.md) | Coexisting CI/CD pipelines |
+| [github-oidc.md](docs/github-oidc.md) | GitHub OIDC authentication model |
 | [migration-plan.md](docs/migration-plan.md) | Incremental migration strategy |
 | [naming-conventions.md](docs/naming-conventions.md) | AWS naming standards |
