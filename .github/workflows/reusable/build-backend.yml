@@ -1,0 +1,51 @@
+# Reusable workflow — build backend (placeholder)
+#
+# Future responsibility: install dependencies, run tests, and package a Lambda
+# deployment bundle (novasafe-auth-v2, novasafe-backend).
+#
+# TODO: implement build steps, artifact upload, and caching.
+# DO NOT authenticate to AWS in this workflow yet.
+
+name: Build Backend (AWS)
+
+on:
+  workflow_call:
+    inputs:
+      application:
+        description: Application repository name (e.g. novasafe-backend)
+        required: true
+        type: string
+      environment:
+        description: Target environment (development, staging, production)
+        required: true
+        type: string
+      node-version:
+        description: Node.js version for the build
+        required: false
+        type: string
+        default: '22'
+      working-directory:
+        description: Path to the backend project root
+        required: false
+        type: string
+        default: '.'
+    outputs:
+      build-ready:
+        description: Whether the placeholder build job completed
+        value: ${{ jobs.build.outputs.build-ready }}
+
+jobs:
+  build:
+    name: Build ${{ inputs.application }} (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    outputs:
+      build-ready: ${{ steps.placeholder.outputs.build-ready }}
+    steps:
+      - name: Placeholder — checkout and package not implemented
+        id: placeholder
+        run: |
+          echo "::notice::TODO: checkout, install, test, and package Lambda bundle for ${{ inputs.application }}"
+          echo "environment=${{ inputs.environment }}"
+          echo "node-version=${{ inputs.node-version }}"
+          echo "working-directory=${{ inputs.working-directory }}"
+          echo "build-ready=true" >> "$GITHUB_OUTPUT"
