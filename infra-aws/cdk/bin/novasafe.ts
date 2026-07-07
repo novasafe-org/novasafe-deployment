@@ -28,8 +28,8 @@ import { QueueStack } from '../lib/workers/queue-stack';
  *   npm run synth -- -c env=staging
  *   npm run synth -- -c env=production
  *
- * Application stacks remain placeholders. GitHubOidcStack provisions IAM
- * authentication resources only (OIDC provider + deploy role).
+ * LandingStack provisions S3 + CloudFront for novasafe.io.
+ * GitHubOidcStack provisions IAM authentication resources only (OIDC provider + deploy role).
  */
 const app = new cdk.App();
 const environment = resolveEnvironment(app);
