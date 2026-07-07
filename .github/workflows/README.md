@@ -1,47 +1,61 @@
-# GitHub Actions — AWS reusable CI/CD foundation
+# GitHub Actions — AWS reusable CI/CD
 
-This directory contains **placeholder** reusable workflows for future NovaSafe AWS deployments.
+Reusable workflows and composite actions for NovaSafe AWS deployments.
 
 ## Status
 
-**Foundation only.** No AWS authentication, deployment, or artifact publishing is implemented. Existing Docker deployment workflows in this directory are **unchanged** and remain production.
+| Workflow | Status |
+|----------|--------|
+| [`deploy-frontend-aws.yml`](reusable/deploy-frontend-aws.yml) | **Implemented** — build, OIDC, S3 sync, CloudFront invalidation |
+| [`build-frontend.yml`](reusable/build-frontend.yml) | Placeholder |
+| [`build-backend.yml`](reusable/build-backend.yml) | Placeholder |
+| [`deploy-backend-aws.yml`](reusable/deploy-backend-aws.yml) | Placeholder |
 
-## Reusable workflows (`reusable/`)
+## Deploy frontend flow
 
-| Workflow | Purpose |
-|----------|---------|
-| [`build-frontend.yml`](reusable/build-frontend.yml) | Build static frontend artifacts (future) |
-| [`build-backend.yml`](reusable/build-backend.yml) | Build backend/Lambda artifacts (future) |
-| [`deploy-frontend-aws.yml`](reusable/deploy-frontend-aws.yml) | Deploy frontend to S3 + CloudFront invalidation (future) |
-| [`deploy-backend-aws.yml`](reusable/deploy-backend-aws.yml) | Deploy backend to Lambda (future) |
+```
+GitHub (caller repo)
+        ↓
+reusable/deploy-frontend-aws.yml
+        ↓
+npm ci → npm run build
+        ↓
+GitHub OIDC → IAM role
+        ↓
+aws s3 sync (cache-aware)
+        ↓
+CloudFront invalidation (/*)
+        ↓
+Deployment complete
+```
 
-## Composite actions (`../actions/`)
+## Composite actions
 
-Shared steps consumed by the reusable workflows above. See [actions README](../actions/README.md).
+| Action | Purpose |
+|--------|---------|
+| [`configure-aws`](../actions/configure-aws/) | OIDC credential setup |
+| [`deploy-s3`](../actions/deploy-s3/) | SPA-aware `aws s3 sync` |
+| [`invalidate-cloudfront`](../actions/invalidate-cloudfront/) | Post-deploy cache flush |
 
-## Consuming repositories
-
-Application repos will call these workflows from their own `.github/workflows/` files:
-
-- `novasafe-landing-v2` — frontend build + deploy
-- `novasafe-app-v2` — frontend build + deploy
-- `novasafe-auth-v2` — backend build + deploy
-- `novasafe-backend` — backend build + deploy
-
-Example (future):
+## Example (novasafe-landing-v2)
 
 ```yaml
 jobs:
   deploy:
+    permissions:
+      id-token: write
+      contents: read
     uses: novasafe-org/novasafe-deployment/.github/workflows/reusable/deploy-frontend-aws.yml@master
     with:
-      application: novasafe-landing-v2
-      environment: staging
-      bucket-name: novasafe-staging-bucket-landing
-      cloudfront-distribution-id: TODO_DISTRIBUTION_ID
-    secrets: inherit
+      application-name: novasafe-landing-v2
+      environment: development
+      s3-bucket: <LandingStack BucketName output>
+      cloudfront-distribution-id: <LandingStack DistributionId output>
+      aws-role-arn: <GitHubOidcStack GitHubActionsDeployRoleArn output>
 ```
+
+No GitHub Secrets required for AWS authentication.
 
 ## Coexistence with Docker
 
-Docker/Nginx VPS deployment continues via existing workflows (`deploy-service.yml`, `deploy-on-change.yml`, etc.). AWS workflows run in parallel during incremental migration.
+Docker/Nginx VPS deployment continues via existing workflows unchanged.

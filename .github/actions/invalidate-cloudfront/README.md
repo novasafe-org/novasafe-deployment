@@ -1,30 +1,23 @@
 # Invalidate CloudFront
 
-Placeholder composite action for CloudFront cache invalidation after frontend deploys.
+Creates a CloudFront cache invalidation after S3 deploy.
 
-## Future responsibility
+## Default behaviour
 
-- Create an invalidation for the given distribution ID
-- Support path patterns (`/*`, `/assets/*`, `/index.html`)
-- Wait for invalidation completion (optional)
+Invalidates `/*` (full distribution flush). This is simple and correct for early-stage deploys.
+
+**Future optimization:** invalidate only `/index.html` once asset fingerprinting + CDN cache policies are proven in production. Fingerprinted `/assets/*` files do not require invalidation.
 
 ## Inputs
 
-| Input | Required | Description |
-|-------|----------|-------------|
-| `distribution-id` | Yes | CloudFront distribution ID |
-| `paths` | No | Paths to invalidate (default `/*`) |
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `distribution-id` | Yes | — | CloudFront distribution ID |
+| `paths` | No | `/*` | Invalidation path(s) |
 
 ## Outputs
 
 | Output | Description |
 |--------|-------------|
-| `invalidated` | Placeholder success flag |
-
-## Consumed by
-
-- `.github/workflows/reusable/deploy-frontend-aws.yml` (future)
-
-## Status
-
-Not implemented. Does not call CloudFront APIs.
+| `invalidated` | Success flag |
+| `invalidation-id` | CloudFront invalidation ID |

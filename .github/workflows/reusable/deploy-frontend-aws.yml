@@ -1,17 +1,16 @@
-# Reusable workflow — deploy frontend to AWS (placeholder)
+# Reusable workflow — deploy frontend to AWS
 #
-# Future responsibility: upload static assets to S3 and invalidate CloudFront
-# for novasafe-landing-v2 and novasafe-app-v2.
+# Builds a React/Vite app, authenticates via GitHub OIDC, syncs to S3,
+# and invalidates CloudFront. No AWS access keys or GitHub Secrets required.
 #
-# TODO: wire configure-aws, deploy-s3, and invalidate-cloudfront composite actions.
-# DO NOT authenticate to AWS or deploy anything in this workflow yet.
+# Consumed by: novasafe-landing-v2, novasafe-app-v2 (future)
 
 name: Deploy Frontend (AWS)
 
 on:
   workflow_call:
     inputs:
-      application:
+      application-name:
         description: Application repository name (e.g. novasafe-landing-v2)
         required: true
         type: string
@@ -19,56 +18,110 @@ on:
         description: Target environment (development, staging, production)
         required: true
         type: string
-      bucket-name:
-        description: Target S3 bucket for static assets
-        required: true
-        type: string
-      cloudfront-distribution-id:
-        description: CloudFront distribution ID to invalidate after deploy
-        required: true
-        type: string
-      source-directory:
-        description: Local directory containing built static assets
+      build-directory:
+        description: Build output directory to upload
         required: false
         type: string
         default: dist
-      aws-role-arn:
-        description: IAM role ARN from GitHubOidcStack (OIDC — no long-lived secrets)
+      node-version:
+        description: Node.js version for build
         required: false
         type: string
-        default: ''
+        default: '22'
       aws-region:
-        description: AWS region for deployment
+        description: AWS region for S3 and CloudFront API calls
         required: false
         type: string
         default: eu-west-1
+      s3-bucket:
+        description: Target S3 bucket (LandingStack output BucketName)
+        required: true
+        type: string
+      cloudfront-distribution-id:
+        description: CloudFront distribution ID (LandingStack output DistributionId)
+        required: true
+        type: string
+      aws-role-arn:
+        description: IAM deploy role ARN from GitHubOidcStack (OIDC — not a secret)
+        required: true
+        type: string
     outputs:
-      deploy-ready:
-        description: Whether the placeholder deploy job completed
-        value: ${{ jobs.deploy.outputs.deploy-ready }}
+      deployment-summary:
+        description: Human-readable deployment summary
+        value: ${{ jobs.deploy.outputs.deployment-summary }}
+      invalidation-id:
+        description: CloudFront invalidation ID
+        value: ${{ jobs.deploy.outputs.invalidation-id }}
 
 jobs:
   deploy:
-    name: Deploy ${{ inputs.application }} → ${{ inputs.environment }}
+    name: Deploy ${{ inputs.application-name }} → ${{ inputs.environment }}
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     outputs:
-      deploy-ready: ${{ steps.placeholder.outputs.deploy-ready }}
+      deployment-summary: ${{ steps.summary.outputs.deployment-summary }}
+      invalidation-id: ${{ steps.invalidate.outputs.invalidation-id }}
     steps:
-      # TODO(OIDC): Enable GitHub OIDC authentication before any AWS deploy steps.
-      # - name: Configure AWS credentials (OIDC)
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: ${{ inputs.aws-role-arn }}
-      #     aws-region: ${{ inputs.aws-region }}
-      #     role-session-name: novasafe-${{ inputs.application }}-${{ inputs.environment }}
-      #
-      # TODO: wire deploy-s3 and invalidate-cloudfront composite actions after OIDC is enabled.
-      - name: Placeholder — S3 upload and CloudFront invalidation not implemented
-        id: placeholder
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Configure AWS credentials (OIDC)
+        uses: ./.github/actions/configure-aws
+        with:
+          role-arn: ${{ inputs.aws-role-arn }}
+          aws-region: ${{ inputs.aws-region }}
+          role-session-name: novasafe-${{ inputs.application-name }}-${{ inputs.environment }}
+
+      - name: Sync build to S3
+        uses: ./.github/actions/deploy-s3
+        with:
+          bucket-name: ${{ inputs.s3-bucket }}
+          source-directory: ${{ inputs.build-directory }}
+          delete-removed: 'true'
+
+      - name: Invalidate CloudFront cache
+        id: invalidate
+        uses: ./.github/actions/invalidate-cloudfront
+        with:
+          distribution-id: ${{ inputs.cloudfront-distribution-id }}
+          paths: /*
+
+      - name: Deployment summary
+        id: summary
+        shell: bash
         run: |
-          echo "::notice::TODO: deploy frontend to s3://${{ inputs.bucket-name }}"
-          echo "::notice::TODO: invalidate CloudFront distribution ${{ inputs.cloudfront-distribution-id }}"
-          echo "application=${{ inputs.application }}"
-          echo "environment=${{ inputs.environment }}"
-          echo "source-directory=${{ inputs.source-directory }}"
-          echo "deploy-ready=true" >> "$GITHUB_OUTPUT"
+          SUMMARY="Deployed ${GITHUB_REPOSITORY} (${{ inputs.application-name }}) to s3://${{ inputs.s3-bucket }} [${{ inputs.environment }}]. CloudFront invalidation: ${{ steps.invalidate.outputs.invalidation-id }}"
+          echo "${SUMMARY}"
+          echo "deployment-summary=${SUMMARY}" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## AWS frontend deployment complete"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Application | \`${{ inputs.application-name }}\` |"
+            echo "| Environment | \`${{ inputs.environment }}\` |"
+            echo "| S3 bucket | \`${{ inputs.s3-bucket }}\` |"
+            echo "| Build directory | \`${{ inputs.build-directory }}\` |"
+            echo "| CloudFront distribution | \`${{ inputs.cloudfront-distribution-id }}\` |"
+            echo "| Invalidation ID | \`${{ steps.invalidate.outputs.invalidation-id }}\` |"
+            echo "| AWS region | \`${{ inputs.aws-region }}\` |"
+            echo ""
+            echo "Authentication: GitHub OIDC (no access keys)."
+            echo ""
+            echo "**Cache strategy:** \`/assets/*\` long TTL; \`index.html\` short TTL; full \`/*\` invalidation (optimize later)."
+          } >> "$GITHUB_STEP_SUMMARY"

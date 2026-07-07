@@ -1,27 +1,43 @@
 name: Invalidate CloudFront
-description: Placeholder for CloudFront cache invalidation (not implemented).
+description: Create a CloudFront cache invalidation after frontend deployment.
 
 inputs:
   distribution-id:
     description: CloudFront distribution ID
     required: true
   paths:
-    description: Space-separated paths to invalidate (e.g. /* or /index.html)
+    description: Paths to invalidate (space-separated for multiple paths)
     required: false
     default: /*
 
 outputs:
   invalidated:
-    description: Whether the placeholder invalidation step completed
-    value: ${{ steps.placeholder.outputs.invalidated }}
+    description: Whether invalidation was created successfully
+    value: ${{ steps.invalidate.outputs.invalidated }}
+  invalidation-id:
+    description: CloudFront invalidation ID
+    value: ${{ steps.invalidate.outputs.invalidation-id }}
 
 runs:
   using: composite
   steps:
-    - name: Placeholder — CloudFront invalidation not implemented
-      id: placeholder
+    - name: Invalidate CloudFront cache
+      id: invalidate
       shell: bash
       run: |
-        echo "::notice::TODO: invalidate CloudFront distribution ${{ inputs.distribution-id }}"
-        echo "paths=${{ inputs.paths }}"
+        set -euo pipefail
+
+        DISTRIBUTION_ID="${{ inputs.distribution-id }}"
+        PATHS="${{ inputs.paths }}"
+
+        echo "Creating CloudFront invalidation for distribution ${DISTRIBUTION_ID} (${PATHS})"
+
+        INVALIDATION_ID=$(aws cloudfront create-invalidation \
+          --distribution-id "$DISTRIBUTION_ID" \
+          --paths "$PATHS" \
+          --query 'Invalidation.Id' \
+          --output text)
+
+        echo "invalidation-id=${INVALIDATION_ID}" >> "$GITHUB_OUTPUT"
         echo "invalidated=true" >> "$GITHUB_OUTPUT"
+        echo "Invalidation created: ${INVALIDATION_ID}"

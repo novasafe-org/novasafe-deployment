@@ -1,31 +1,65 @@
 name: Deploy S3
-description: Placeholder for syncing static assets to an S3 bucket (not implemented).
+description: Sync a static frontend build to a private S3 bucket with SPA cache headers.
 
 inputs:
   bucket-name:
     description: Target S3 bucket name
     required: true
   source-directory:
-    description: Local directory to sync
+    description: Local build output directory
     required: false
     default: dist
   delete-removed:
     description: Remove S3 objects not present in the source directory
     required: false
-    default: 'false'
+    default: 'true'
 
 outputs:
   deployed:
-    description: Whether the placeholder deploy step completed
-    value: ${{ steps.placeholder.outputs.deployed }}
+    description: Whether the S3 sync completed successfully
+    value: ${{ steps.deploy.outputs.deployed }}
 
 runs:
   using: composite
   steps:
-    - name: Placeholder — S3 sync not implemented
-      id: placeholder
+    - name: Sync static site to S3
+      id: deploy
       shell: bash
       run: |
-        echo "::notice::TODO: sync ${{ inputs.source-directory }} to s3://${{ inputs.bucket-name }}"
-        echo "delete-removed=${{ inputs.delete-removed }}"
+        set -euo pipefail
+
+        SOURCE="${{ inputs.source-directory }}"
+        BUCKET="${{ inputs.bucket-name }}"
+        DELETE_FLAG=""
+
+        if [ "${{ inputs.delete-removed }}" = "true" ]; then
+          DELETE_FLAG="--delete"
+        fi
+
+        if [ ! -d "$SOURCE" ]; then
+          echo "::error::Build directory not found: $SOURCE"
+          exit 1
+        fi
+
+        if [ ! -f "$SOURCE/index.html" ]; then
+          echo "::error::Expected SPA entry point not found: $SOURCE/index.html"
+          exit 1
+        fi
+
+        echo "Syncing ${SOURCE} → s3://${BUCKET}/"
+
+        # Mirror site content except index.html (short-cache shell uploaded separately).
+        aws s3 sync "$SOURCE" "s3://${BUCKET}/" ${DELETE_FLAG} --exclude "index.html"
+
+        # Fingerprinted Vite assets — long cache (hash in filename busts cache).
+        if [ -d "$SOURCE/assets" ]; then
+          aws s3 sync "$SOURCE/assets" "s3://${BUCKET}/assets" ${DELETE_FLAG} \
+            --cache-control "public, max-age=31536000, immutable"
+        fi
+
+        # SPA shell — minimal caching; CloudFront invalidation handles fresh deploys.
+        aws s3 cp "$SOURCE/index.html" "s3://${BUCKET}/index.html" \
+          --cache-control "public, max-age=0, must-revalidate" \
+          --content-type "text/html; charset=utf-8"
+
         echo "deployed=true" >> "$GITHUB_OUTPUT"

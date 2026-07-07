@@ -1,15 +1,13 @@
 name: Configure AWS
-description: Placeholder for OIDC-based AWS credential configuration (not implemented).
+description: Configure short-lived AWS credentials via GitHub OIDC (no access keys).
 
 inputs:
   aws-region:
     description: AWS region for subsequent CLI commands
-    required: false
-    default: eu-west-1
+    required: true
   role-arn:
     description: IAM role ARN to assume via GitHub OIDC
-    required: false
-    default: ''
+    required: true
   role-session-name:
     description: Session name for the assumed role
     required: false
@@ -17,18 +15,20 @@ inputs:
 
 outputs:
   configured:
-    description: Whether the placeholder configuration step completed
-    value: ${{ steps.placeholder.outputs.configured }}
+    description: Whether AWS credentials were configured successfully
+    value: ${{ steps.mark.outputs.configured }}
 
 runs:
   using: composite
   steps:
-    - name: Placeholder — AWS OIDC configuration not implemented
-      id: placeholder
+    - name: Configure AWS credentials (OIDC)
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.role-arn }}
+        aws-region: ${{ inputs.aws-region }}
+        role-session-name: ${{ inputs.role-session-name }}
+
+    - name: Mark credentials configured
+      id: mark
       shell: bash
-      run: |
-        echo "::notice::TODO: configure AWS credentials via OIDC"
-        echo "aws-region=${{ inputs.aws-region }}"
-        echo "role-arn=${{ inputs.role-arn }}"
-        echo "role-session-name=${{ inputs.role-session-name }}"
-        echo "configured=true" >> "$GITHUB_OUTPUT"
+      run: echo "configured=true" >> "$GITHUB_OUTPUT"
