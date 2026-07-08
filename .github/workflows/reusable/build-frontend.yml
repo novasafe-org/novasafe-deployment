@@ -15,10 +15,6 @@ on:
         description: Application repository name (e.g. novasafe-landing-v2)
         required: true
         type: string
-      environment:
-        description: Target environment (development, staging, production)
-        required: true
-        type: string
       node-version:
         description: Node.js version for the build
         required: false
@@ -29,16 +25,6 @@ on:
         required: false
         type: string
         default: '.'
-      aws-role-arn:
-        description: IAM role ARN from GitHubOidcStack (future OIDC authentication)
-        required: false
-        type: string
-        default: ''
-      aws-region:
-        description: AWS region for optional authenticated steps (future)
-        required: false
-        type: string
-        default: eu-west-1
     outputs:
       build-ready:
         description: Whether the placeholder build job completed
@@ -46,23 +32,21 @@ on:
 
 jobs:
   build:
-    name: Build ${{ inputs.application }} (${{ inputs.environment }})
+    name: Build ${{ inputs.application }} (production)
     runs-on: ubuntu-latest
     outputs:
       build-ready: ${{ steps.placeholder.outputs.build-ready }}
     steps:
-      # TODO(OIDC): Authenticate to AWS when build steps require it (e.g. pulling private artifacts).
-      # - name: Configure AWS credentials (OIDC)
-      #   uses: aws-actions/configure-aws-credentials@v4
+      # TODO(OIDC): Authenticate via Repository Variables when build steps require AWS.
+      # - uses: ./.github/actions/configure-aws
       #   with:
-      #     role-to-assume: ${{ inputs.aws-role-arn }}
-      #     aws-region: ${{ inputs.aws-region }}
-      #     role-session-name: novasafe-${{ inputs.application }}-${{ inputs.environment }}
+      #     role-arn: ${{ vars.AWS_ROLE_ARN }}
+      #     aws-region: ${{ vars.AWS_REGION }}
+      #     role-session-name: novasafe-${{ inputs.application }}
       - name: Placeholder — checkout and build not implemented
         id: placeholder
         run: |
           echo "::notice::TODO: checkout, install, test, and build frontend for ${{ inputs.application }}"
-          echo "environment=${{ inputs.environment }}"
           echo "node-version=${{ inputs.node-version }}"
           echo "working-directory=${{ inputs.working-directory }}"
           echo "build-ready=true" >> "$GITHUB_OUTPUT"
