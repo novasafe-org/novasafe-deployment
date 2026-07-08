@@ -116,11 +116,13 @@ jobs:
           MANIFEST_KEY: ${{ inputs.manifest-key }}
         run: |
           set -euo pipefail
+          REPO_ROOT="${GITHUB_WORKSPACE}"
           BEFORE=$(node -p "require('./$PKG').version")
-          node .novasafe-tooling/scripts/versioning/bump-version.mjs "$BUMP" --package "$PKG"
+          node .novasafe-tooling/scripts/versioning/bump-version.mjs "$BUMP" --package "$PKG" --repo-root "$REPO_ROOT"
           AFTER=$(node -p "require('./$PKG').version")
           export AFTER
           node .novasafe-tooling/scripts/versioning/append-changelog.mjs \
+            --repo-root "$REPO_ROOT" \
             --version "$AFTER" \
             --section "$SECTION" \
             --message "$MESSAGE" \
