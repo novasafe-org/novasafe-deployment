@@ -1,0 +1,139 @@
+# One-time CDK bootstrap for an AWS account/region via GitHub OIDC.
+#
+# Provisions the CDKToolkit stack only — does NOT deploy application stacks.
+#
+# Required GitHub Environment variables (per environment: development, staging, production):
+#   AWS_ROLE_ARN         — IAM role ARN to assume (bootstrap permissions)
+#   AWS_REGION           — AWS region to bootstrap
+#   CDK_DEFAULT_ACCOUNT  — Target AWS account ID
+#
+# See infra-aws/docs/bootstrap.md
+
+name: Bootstrap CDK
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        default: development
+        options:
+          - development
+          - staging
+          - production
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: bootstrap-cdk-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: CDK Bootstrap (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: infra-aws/cdk
+
+    env:
+      BOOTSTRAP_ENV: ${{ inputs.environment }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      CDK_DEFAULT_ACCOUNT: ${{ vars.CDK_DEFAULT_ACCOUNT }}
+
+    steps:
+      - name: Validate GitHub variables
+        working-directory: .
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in AWS_ROLE_ARN AWS_REGION CDK_DEFAULT_ACCOUNT; do
+            value="${!name:-}"
+            if [ -z "$value" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing GitHub Environment variables for '${BOOTSTRAP_ENV}': ${missing[*]}"
+            echo "::error::Configure them under Settings → Environments → ${BOOTSTRAP_ENV} → Environment variables."
+            echo "::error::OIDC only — do not use AWS access keys or repository secrets."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: infra-aws/cdk/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install AWS CDK CLI globally
+        run: npm install -g aws-cdk@2
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: novasafe-cdk-bootstrap-${{ inputs.environment }}
+
+      - name: Verify AWS identity
+        id: identity
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          echo "account=$ACCOUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Run CDK bootstrap
+        id: bootstrap
+        env:
+          CDK_DEFAULT_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          set -euo pipefail
+          echo "Bootstrapping aws://${CDK_DEFAULT_ACCOUNT}/${AWS_REGION} (env=${BOOTSTRAP_ENV})"
+          cdk bootstrap "aws://${CDK_DEFAULT_ACCOUNT}/${AWS_REGION}" \
+            -c "env=${BOOTSTRAP_ENV}" \
+            --require-approval never
+
+      - name: Read bootstrap version
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION=$(aws ssm get-parameter \
+            --name /cdk-bootstrap/hnb659fds/version \
+            --region "$AWS_REGION" \
+            --query Parameter.Value \
+            --output text)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Bootstrap version: $VERSION"
+
+      - name: Print success summary
+        run: |
+          {
+            echo "# CDK bootstrap complete"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Environment | \`${BOOTSTRAP_ENV}\` |"
+            echo "| AWS Account | \`${CDK_DEFAULT_ACCOUNT}\` |"
+            echo "| Region | \`${AWS_REGION}\` |"
+            echo "| Bootstrap version | \`${{ steps.version.outputs.version }}\` |"
+            echo "| Workflow run | [${GITHUB_RUN_ID}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
+            echo ""
+            echo "The \`CDKToolkit\` stack is ready. You can now run **Deploy Infrastructure**."
+            echo ""
+            echo "> **Note:** Landing stacks use ACM certificates in \`us-east-1\`. If \`${AWS_REGION}\` is not \`us-east-1\`, run this workflow again with \`AWS_REGION=us-east-1\` configured for the same environment (or bootstrap \`us-east-1\` manually once)."
+          } >> "$GITHUB_STEP_SUMMARY"

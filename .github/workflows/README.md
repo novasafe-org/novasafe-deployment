@@ -6,11 +6,26 @@ Reusable workflows and composite actions for NovaSafe AWS deployments.
 
 | Workflow | Status |
 |----------|--------|
+| [`bootstrap-cdk.yml`](bootstrap-cdk.yml) | **Implemented** — one-time CDK bootstrap via OIDC (manual dispatch) |
 | [`deploy-infrastructure.yml`](deploy-infrastructure.yml) | **Implemented** — CDK synth/diff/deploy via OIDC (manual dispatch) |
 | [`deploy-frontend-aws.yml`](reusable/deploy-frontend-aws.yml) | **Implemented** — build, OIDC, S3 sync, CloudFront invalidation |
 | [`build-frontend.yml`](reusable/build-frontend.yml) | Placeholder |
 | [`build-backend.yml`](reusable/build-backend.yml) | Placeholder |
 | [`deploy-backend-aws.yml`](reusable/deploy-backend-aws.yml) | Placeholder |
+
+## Bootstrap CDK (one-time)
+
+```
+Actions → Bootstrap CDK → Run workflow
+        ↓
+Select environment
+        ↓
+GitHub OIDC → IAM role
+        ↓
+cdk bootstrap aws://<account>/<region>
+```
+
+See [`infra-aws/docs/bootstrap.md`](../infra-aws/docs/bootstrap.md).
 
 ## Deploy infrastructure (CDK)
 
