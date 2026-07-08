@@ -6,10 +6,31 @@ Reusable workflows and composite actions for NovaSafe AWS deployments.
 
 | Workflow | Status |
 |----------|--------|
+| [`deploy-infrastructure.yml`](deploy-infrastructure.yml) | **Implemented** — CDK synth/diff/deploy via OIDC (manual dispatch) |
 | [`deploy-frontend-aws.yml`](reusable/deploy-frontend-aws.yml) | **Implemented** — build, OIDC, S3 sync, CloudFront invalidation |
 | [`build-frontend.yml`](reusable/build-frontend.yml) | Placeholder |
 | [`build-backend.yml`](reusable/build-backend.yml) | Placeholder |
 | [`deploy-backend-aws.yml`](reusable/deploy-backend-aws.yml) | Placeholder |
+
+## Deploy infrastructure (CDK)
+
+```
+Actions → Deploy Infrastructure → Run workflow
+        ↓
+Select environment + stack (Foundation / Landing / All)
+        ↓
+GitHub OIDC → IAM role (Environment variables)
+        ↓
+Bootstrap check → CDK synth → CDK diff (artifact) → CDK deploy
+        ↓
+Deployment summary
+```
+
+Configure **Environment variables** per GitHub Environment (`development`, `staging`, `production`):
+
+- `AWS_ROLE_ARN`, `AWS_REGION`, `CDK_DEFAULT_ACCOUNT`, `CDK_DEFAULT_REGION`
+
+See [`infra-aws/docs/deployment-flow.md`](../infra-aws/docs/deployment-flow.md).
 
 ## Deploy frontend flow
 

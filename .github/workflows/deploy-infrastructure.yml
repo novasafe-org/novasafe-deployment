@@ -1,0 +1,309 @@
+# Deploy NovaSafe AWS CDK infrastructure from GitHub Actions (OIDC only).
+#
+# Manual dispatch — never runs on push. Authenticates via GitHub OIDC;
+# AWS access keys are not used.
+#
+# Required GitHub Environment variables (per environment: development, staging, production):
+#   AWS_ROLE_ARN         — IAM role ARN to assume (CDK deploy permissions)
+#   AWS_REGION           — Primary AWS region (e.g. eu-west-1)
+#   CDK_DEFAULT_ACCOUNT  — Target AWS account ID
+#   CDK_DEFAULT_REGION   — CDK default region (usually same as AWS_REGION)
+#
+# See infra-aws/docs/deployment-flow.md for setup and bootstrap instructions.
+
+name: Deploy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        default: development
+        options:
+          - development
+          - staging
+          - production
+      stack:
+        description: Stack to deploy
+        required: true
+        type: choice
+        default: Landing
+        options:
+          - Foundation
+          - Landing
+          - All
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-infrastructure-${{ inputs.environment }}-${{ inputs.stack }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: CDK Deploy (${{ inputs.environment }} / ${{ inputs.stack }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: infra-aws/cdk
+
+    env:
+      DEPLOY_ENV: ${{ inputs.environment }}
+      DEPLOY_STACK: ${{ inputs.stack }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      CDK_DEFAULT_ACCOUNT: ${{ vars.CDK_DEFAULT_ACCOUNT }}
+      CDK_DEFAULT_REGION: ${{ vars.CDK_DEFAULT_REGION }}
+
+    steps:
+      - name: Record start time
+        id: timer
+        working-directory: .
+        run: echo "start=$(date -u +%s)" >> "$GITHUB_OUTPUT"
+
+      - name: Validate GitHub variables
+        working-directory: .
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in AWS_ROLE_ARN AWS_REGION CDK_DEFAULT_ACCOUNT CDK_DEFAULT_REGION; do
+            value="${!name:-}"
+            if [ -z "$value" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing GitHub Environment variables for '${DEPLOY_ENV}': ${missing[*]}"
+            echo "::error::Configure them under Settings → Environments → ${DEPLOY_ENV} → Environment variables."
+            echo "::error::OIDC only — do not use AWS access keys or repository secrets."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: infra-aws/cdk/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build CDK project
+        run: npm run build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: novasafe-cdk-${{ inputs.environment }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Resolve stack targets
+        id: stacks
+        run: |
+          set -euo pipefail
+          case "$DEPLOY_ENV" in
+            development) SHORT=dev ;;
+            staging)     SHORT=staging ;;
+            production)  SHORT=prod ;;
+            *)
+              echo "::error::Unknown environment: $DEPLOY_ENV"
+              exit 1
+              ;;
+          esac
+          echo "short=$SHORT" >> "$GITHUB_OUTPUT"
+
+          case "$DEPLOY_STACK" in
+            Foundation)
+              echo "targets=novasafe-${SHORT}-foundation novasafe-${SHORT}-github-oidc" >> "$GITHUB_OUTPUT"
+              echo "label=Foundation (foundation + github-oidc)" >> "$GITHUB_OUTPUT"
+              echo "check_us_east=false" >> "$GITHUB_OUTPUT"
+              ;;
+            Landing)
+              echo "targets=novasafe-${SHORT}-landing" >> "$GITHUB_OUTPUT"
+              echo "label=Landing" >> "$GITHUB_OUTPUT"
+              echo "check_us_east=true" >> "$GITHUB_OUTPUT"
+              ;;
+            All)
+              echo "targets=--all" >> "$GITHUB_OUTPUT"
+              echo "label=All stacks" >> "$GITHUB_OUTPUT"
+              echo "check_us_east=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::Unknown stack selection: $DEPLOY_STACK"
+              exit 1
+              ;;
+          esac
+
+      - name: Bootstrap check
+        working-directory: .
+        env:
+          PRIMARY_REGION: ${{ vars.CDK_DEFAULT_REGION }}
+          CHECK_US_EAST: ${{ steps.stacks.outputs.check_us_east }}
+        run: |
+          set -euo pipefail
+
+          check_bootstrap() {
+            local region="$1"
+            local status
+            status=$(aws cloudformation describe-stacks \
+              --stack-name CDKToolkit \
+              --region "$region" \
+              --query 'Stacks[0].StackStatus' \
+              --output text 2>/dev/null || echo "NOT_FOUND")
+
+            if [[ "$status" != "CREATE_COMPLETE" && "$status" != "UPDATE_COMPLETE" ]]; then
+              echo "::error::CDK bootstrap not found in ${region} (status: ${status})."
+              echo "::error::Bootstrap must be executed once per account/region before deploying:"
+              echo "::error::  cd infra-aws/cdk"
+              echo "::error::  npx cdk bootstrap aws://${CDK_DEFAULT_ACCOUNT}/${region} -c env=${DEPLOY_ENV}"
+              echo "::error::Automatic bootstrap is intentionally disabled in this workflow."
+              exit 1
+            fi
+            echo "✔ CDK bootstrap present in ${region}"
+          }
+
+          check_bootstrap "$PRIMARY_REGION"
+
+          if [ "$CHECK_US_EAST" = "true" ] && [ "$PRIMARY_REGION" != "us-east-1" ]; then
+            check_bootstrap "us-east-1"
+          fi
+
+      - name: CDK Synth
+        run: npx cdk synth -c "env=${DEPLOY_ENV}"
+
+      - name: CDK Diff
+        id: diff
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          TARGETS="${{ steps.stacks.outputs.targets }}"
+          if [ "$TARGETS" = "--all" ]; then
+            npx cdk diff --all -c "env=${DEPLOY_ENV}" 2>&1 | tee ../cdk-diff.txt
+          else
+            # shellcheck disable=SC2086
+            npx cdk diff $TARGETS -c "env=${DEPLOY_ENV}" 2>&1 | tee ../cdk-diff.txt
+          fi
+
+      - name: Upload CDK diff artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-diff-${{ inputs.environment }}-${{ inputs.stack }}-${{ github.run_id }}
+          path: infra-aws/cdk-diff.txt
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: CDK Deploy
+        id: deploy
+        run: |
+          set -euo pipefail
+          TARGETS="${{ steps.stacks.outputs.targets }}"
+          if [ "$TARGETS" = "--all" ]; then
+            npx cdk deploy --all -c "env=${DEPLOY_ENV}" --require-approval never
+          else
+            # shellcheck disable=SC2086
+            npx cdk deploy $TARGETS -c "env=${DEPLOY_ENV}" --require-approval never
+          fi
+
+      - name: Collect stack outputs
+        id: outputs
+        if: success()
+        run: |
+          set -euo pipefail
+          SHORT="${{ steps.stacks.outputs.short }}"
+          DEPLOYED=""
+
+          collect_outputs() {
+            local stack_name="$1"
+            if ! aws cloudformation describe-stacks --stack-name "$stack_name" --region "$CDK_DEFAULT_REGION" >/dev/null 2>&1; then
+              return 0
+            fi
+            echo "### ${stack_name}" >> "$GITHUB_STEP_SUMMARY"
+            aws cloudformation describe-stacks \
+              --stack-name "$stack_name" \
+              --region "$CDK_DEFAULT_REGION" \
+              --query 'Stacks[0].Outputs[*].[OutputKey,OutputValue,Description]' \
+              --output table >> "$GITHUB_STEP_SUMMARY" || true
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            DEPLOYED="${DEPLOYED} ${stack_name}"
+          }
+
+          case "$DEPLOY_STACK" in
+            Foundation)
+              collect_outputs "novasafe-${SHORT}-foundation"
+              collect_outputs "novasafe-${SHORT}-github-oidc"
+              ;;
+            Landing)
+              collect_outputs "novasafe-${SHORT}-landing"
+              ;;
+            All)
+              for stack in \
+                "novasafe-${SHORT}-foundation" \
+                "novasafe-${SHORT}-github-oidc" \
+                "novasafe-${SHORT}-landing" \
+                "novasafe-${SHORT}-auth" \
+                "novasafe-${SHORT}-app" \
+                "novasafe-${SHORT}-mobile-api" \
+                "novasafe-${SHORT}-admin-api" \
+                "novasafe-${SHORT}-workers" \
+                "novasafe-${SHORT}-security" \
+                "novasafe-${SHORT}-observability"; do
+                collect_outputs "$stack"
+              done
+              ;;
+          esac
+
+          echo "deployed=${DEPLOYED}" >> "$GITHUB_OUTPUT"
+
+      - name: Deployment summary
+        if: always()
+        working-directory: .
+        env:
+          START: ${{ steps.timer.outputs.start }}
+          STACK_LABEL: ${{ steps.stacks.outputs.label }}
+          DEPLOYED: ${{ steps.outputs.outputs.deployed }}
+        run: |
+          set -euo pipefail
+          END=$(date -u +%s)
+          DURATION=$((END - START))
+          MIN=$((DURATION / 60))
+          SEC=$((DURATION % 60))
+
+          {
+            echo "# Infrastructure deployment summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Environment | \`${DEPLOY_ENV}\` |"
+            echo "| Region | \`${CDK_DEFAULT_REGION}\` |"
+            echo "| Account | \`${CDK_DEFAULT_ACCOUNT}\` |"
+            echo "| Stack selection | ${STACK_LABEL} |"
+            echo "| Duration | ${MIN}m ${SEC}s |"
+            echo "| Workflow run | [${GITHUB_RUN_ID}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "**Status:** ✅ Deploy succeeded" >> "$GITHUB_STEP_SUMMARY"
+            if [ -n "${DEPLOYED:-}" ]; then
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "**Stacks deployed:**\`${DEPLOYED}\`" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "**Status:** ❌ Deploy failed — see job logs above." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "CDK diff artifact: \`cdk-diff-${DEPLOY_ENV}-${DEPLOY_STACK}-${GITHUB_RUN_ID}\`" >> "$GITHUB_STEP_SUMMARY"
