@@ -76,9 +76,19 @@ Configure as **Environment variables** under **Settings → Environments** for e
 
 The IAM role must trust GitHub OIDC (`token.actions.githubusercontent.com`) and allow CDK deployment actions (CloudFormation, IAM, S3, CloudFront, ACM, etc.). The `GitHubOidcStack` deploy role is a starting point; infrastructure deploy may require broader inline policies than application S3 sync.
 
-### One-time bootstrap (manual)
+### One-time bootstrap
 
-CDK bootstrap is **not** automated by the workflow. Before the first deploy, run once per account/region:
+CDK bootstrap is **not** automated by the deploy workflow. Use the dedicated bootstrap workflow or run locally once per account/region.
+
+**GitHub Actions (recommended):**
+
+```
+Actions → Bootstrap CDK → Run workflow → select environment
+```
+
+See [bootstrap.md](bootstrap.md) for details, required variables, and multi-region (`us-east-1`) guidance.
+
+**Manual CLI alternative:**
 
 ```bash
 cd infra-aws/cdk
@@ -92,7 +102,7 @@ npx cdk bootstrap aws://<ACCOUNT_ID>/eu-west-1 -c env=development
 npx cdk bootstrap aws://<ACCOUNT_ID>/us-east-1 -c env=development
 ```
 
-Repeat for staging/production accounts as needed. The workflow checks for the `CDKToolkit` CloudFormation stack and fails with bootstrap instructions if missing.
+The **Deploy Infrastructure** workflow checks for the `CDKToolkit` CloudFormation stack and fails with bootstrap instructions if missing.
 
 ### Recommended first deploy sequence
 
