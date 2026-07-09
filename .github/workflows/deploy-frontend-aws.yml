@@ -7,7 +7,7 @@
 #   Repository Variables: AWS_ROLE_ARN, AWS_REGION
 #   Environment Variables (github-environment): VITE_LANDING_URL, VITE_AUTH_URL, VITE_APP_URL
 #
-# Consumed by: novasafe-landing-v2, novasafe-app-v2 (future)
+# Consumed by: novasafe-landing-v2, novasafe-auth-v2, novasafe-app-v2
 
 name: Deploy Frontend (AWS)
 
@@ -43,6 +43,16 @@ on:
         required: false
         type: string
         default: production
+      generate-runtime-config:
+        description: Write runtime-config.js into the build directory before upload
+        required: false
+        type: boolean
+        default: false
+      require-spa-index:
+        description: Require index.html in the build output (false for TanStack client bundles)
+        required: false
+        type: boolean
+        default: true
       s3-bucket:
         description: Target S3 bucket (LandingStack output BucketName)
         required: true
@@ -134,6 +144,11 @@ jobs:
           VITE_APP_URL: ${{ vars.VITE_APP_URL }}
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_APP_VERSION: ${{ vars.VITE_APP_VERSION }}
+          VITE_GOOGLE_WEB_CLIENT_ID: ${{ vars.VITE_GOOGLE_WEB_CLIENT_ID }}
+          VITE_REVENUECAT_PUBLIC_API_KEY_WEB: ${{ vars.VITE_REVENUECAT_PUBLIC_API_KEY_WEB }}
+          VITE_REVENUECAT_ENTITLEMENT_PRO: ${{ vars.VITE_REVENUECAT_ENTITLEMENT_PRO }}
+          VITE_REVENUECAT_PACKAGE_MONTHLY: ${{ vars.VITE_REVENUECAT_PACKAGE_MONTHLY }}
+          VITE_REVENUECAT_PACKAGE_YEARLY: ${{ vars.VITE_REVENUECAT_PACKAGE_YEARLY }}
           PUBLIC_SITE_URL: ${{ vars.PUBLIC_SITE_URL }}
         run: |
           if [ "${{ inputs.package-manager }}" = "pnpm" ]; then
@@ -141,6 +156,44 @@ jobs:
           else
             npm run build
           fi
+
+      - name: Generate runtime-config.js
+        if: inputs.generate-runtime-config
+        env:
+          TARGET: ${{ inputs.build-directory }}/runtime-config.js
+          VITE_LANDING_URL: ${{ vars.VITE_LANDING_URL }}
+          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL }}
+          VITE_APP_URL: ${{ vars.VITE_APP_URL }}
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_APP_VERSION: ${{ vars.VITE_APP_VERSION }}
+          VITE_GOOGLE_WEB_CLIENT_ID: ${{ vars.VITE_GOOGLE_WEB_CLIENT_ID }}
+          VITE_REVENUECAT_PUBLIC_API_KEY_WEB: ${{ vars.VITE_REVENUECAT_PUBLIC_API_KEY_WEB }}
+          VITE_REVENUECAT_ENTITLEMENT_PRO: ${{ vars.VITE_REVENUECAT_ENTITLEMENT_PRO }}
+          VITE_REVENUECAT_PACKAGE_MONTHLY: ${{ vars.VITE_REVENUECAT_PACKAGE_MONTHLY }}
+          VITE_REVENUECAT_PACKAGE_YEARLY: ${{ vars.VITE_REVENUECAT_PACKAGE_YEARLY }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const keys = [
+            'VITE_LANDING_URL',
+            'VITE_AUTH_URL',
+            'VITE_APP_URL',
+            'VITE_API_URL',
+            'VITE_APP_VERSION',
+            'VITE_GOOGLE_WEB_CLIENT_ID',
+            'VITE_REVENUECAT_PUBLIC_API_KEY_WEB',
+            'VITE_REVENUECAT_ENTITLEMENT_PRO',
+            'VITE_REVENUECAT_PACKAGE_MONTHLY',
+            'VITE_REVENUECAT_PACKAGE_YEARLY',
+          ];
+          const payload = {};
+          for (const key of keys) {
+            const value = process.env[key];
+            if (value) payload[key] = value;
+          }
+          fs.writeFileSync(process.env.TARGET, `window.__NS_PUBLIC_ENV__=${JSON.stringify(payload)};\n`);
+          NODE
 
       - name: Checkout deployment composite actions
         uses: actions/checkout@v4
@@ -166,6 +219,7 @@ jobs:
           bucket-name: ${{ inputs.s3-bucket }}
           source-directory: ${{ inputs.build-directory }}
           delete-removed: 'true'
+          require-index-html: ${{ inputs.require-spa-index }}
 
       - name: Invalidate CloudFront cache
         id: invalidate

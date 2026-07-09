@@ -13,6 +13,10 @@ inputs:
     description: Remove S3 objects not present in the source directory
     required: false
     default: 'true'
+  require-index-html:
+    description: Fail when index.html is missing (disable for TanStack client bundles)
+    required: false
+    default: 'true'
 
 outputs:
   deployed:
@@ -41,25 +45,35 @@ runs:
           exit 1
         fi
 
-        if [ ! -f "$SOURCE/index.html" ]; then
+        if [ "${{ inputs.require-index-html }}" = "true" ] && [ ! -f "$SOURCE/index.html" ]; then
           echo "::error::Expected SPA entry point not found: $SOURCE/index.html"
           exit 1
         fi
 
         echo "Syncing ${SOURCE} → s3://${BUCKET}/"
 
-        # Mirror site content except index.html (short-cache shell uploaded separately).
-        aws s3 sync "$SOURCE" "s3://${BUCKET}/" ${DELETE_FLAG} --exclude "index.html"
+        if [ -f "$SOURCE/index.html" ]; then
+          # Mirror site content except index.html (short-cache shell uploaded separately).
+          aws s3 sync "$SOURCE" "s3://${BUCKET}/" ${DELETE_FLAG} --exclude "index.html"
 
-        # Fingerprinted Vite assets — long cache (hash in filename busts cache).
-        if [ -d "$SOURCE/assets" ]; then
-          aws s3 sync "$SOURCE/assets" "s3://${BUCKET}/assets" ${DELETE_FLAG} \
-            --cache-control "public, max-age=31536000, immutable"
+          # Fingerprinted Vite assets — long cache (hash in filename busts cache).
+          if [ -d "$SOURCE/assets" ]; then
+            aws s3 sync "$SOURCE/assets" "s3://${BUCKET}/assets" ${DELETE_FLAG} \
+              --cache-control "public, max-age=31536000, immutable"
+          fi
+
+          # SPA shell — minimal caching; CloudFront invalidation handles fresh deploys.
+          aws s3 cp "$SOURCE/index.html" "s3://${BUCKET}/index.html" \
+            --cache-control "public, max-age=0, must-revalidate" \
+            --content-type "text/html; charset=utf-8"
+        else
+          aws s3 sync "$SOURCE" "s3://${BUCKET}/" ${DELETE_FLAG}
         fi
 
-        # SPA shell — minimal caching; CloudFront invalidation handles fresh deploys.
-        aws s3 cp "$SOURCE/index.html" "s3://${BUCKET}/index.html" \
-          --cache-control "public, max-age=0, must-revalidate" \
-          --content-type "text/html; charset=utf-8"
+        if [ -f "$SOURCE/runtime-config.js" ]; then
+          aws s3 cp "$SOURCE/runtime-config.js" "s3://${BUCKET}/runtime-config.js" \
+            --cache-control "public, max-age=0, must-revalidate" \
+            --content-type "application/javascript; charset=utf-8"
+        fi
 
         echo "deployed=true" >> "$GITHUB_OUTPUT"
