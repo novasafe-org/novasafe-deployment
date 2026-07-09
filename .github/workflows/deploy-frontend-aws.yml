@@ -81,15 +81,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Enable Corepack (pnpm)
+        if: inputs.package-manager == 'pnpm'
+        run: corepack enable
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
           cache: ${{ inputs.package-manager }}
-
-      - name: Enable Corepack (pnpm)
-        if: inputs.package-manager == 'pnpm'
-        run: corepack enable
 
       - name: Install dependencies
         run: |
