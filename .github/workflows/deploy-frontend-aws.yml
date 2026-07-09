@@ -33,7 +33,7 @@ on:
         type: string
         default: npm
       preinstall-script:
-        description: Optional script to run before install (e.g. vendor local file: deps)
+        description: 'Optional script to run before install (e.g. vendor local file dependencies)'
         required: false
         type: string
         default: ''
