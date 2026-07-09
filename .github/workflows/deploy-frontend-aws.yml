@@ -32,6 +32,11 @@ on:
         required: false
         type: string
         default: npm
+      preinstall-script:
+        description: Optional script to run before install (e.g. vendor local file: deps)
+        required: false
+        type: string
+        default: ''
       s3-bucket:
         description: Target S3 bucket (LandingStack output BucketName)
         required: true
@@ -90,6 +95,10 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
           cache: ${{ inputs.package-manager }}
+
+      - name: Prepare local dependencies
+        if: inputs.preinstall-script != ''
+        run: node ${{ inputs.preinstall-script }}
 
       - name: Install dependencies
         run: |
