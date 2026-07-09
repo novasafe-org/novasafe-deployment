@@ -3,8 +3,9 @@
 # Builds a React/Vite app, authenticates via GitHub OIDC, syncs to S3,
 # and invalidates CloudFront. No AWS access keys or GitHub Secrets required.
 #
-# Caller repositories must configure Repository Variables:
-#   AWS_ROLE_ARN, AWS_REGION
+# Caller repositories must configure:
+#   Repository Variables: AWS_ROLE_ARN, AWS_REGION
+#   Environment Variables (github-environment): VITE_LANDING_URL, VITE_AUTH_URL, VITE_APP_URL
 #
 # Consumed by: novasafe-landing-v2, novasafe-app-v2 (future)
 
@@ -37,6 +38,11 @@ on:
         required: false
         type: string
         default: ''
+      github-environment:
+        description: GitHub Environment name for environment-scoped variables
+        required: false
+        type: string
+        default: production
       s3-bucket:
         description: Target S3 bucket (LandingStack output BucketName)
         required: true
@@ -57,6 +63,7 @@ jobs:
   deploy:
     name: Deploy ${{ inputs.application-name }} → production
     runs-on: ubuntu-latest
+    environment: ${{ inputs.github-environment }}
     permissions:
       id-token: write
       contents: read
@@ -67,7 +74,11 @@ jobs:
       AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
       AWS_REGION: ${{ vars.AWS_REGION }}
     steps:
-      - name: Validate repository variables
+      - name: Validate deployment variables
+        env:
+          VITE_LANDING_URL: ${{ vars.VITE_LANDING_URL }}
+          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL }}
+          VITE_APP_URL: ${{ vars.VITE_APP_URL }}
         run: |
           set -euo pipefail
           missing=()
@@ -77,9 +88,16 @@ jobs:
               missing+=("$name")
             fi
           done
+          for name in VITE_LANDING_URL VITE_AUTH_URL VITE_APP_URL; do
+            value="${!name:-}"
+            if [ -z "$value" ]; then
+              missing+=("$name")
+            fi
+          done
           if [ "${#missing[@]}" -gt 0 ]; then
-            echo "::error::Missing Repository Variables in ${GITHUB_REPOSITORY}: ${missing[*]}"
-            echo "::error::Configure under Settings → Secrets and variables → Actions → Variables."
+            echo "::error::Missing variables in ${GITHUB_REPOSITORY} (environment: ${{ inputs.github-environment }}): ${missing[*]}"
+            echo "::error::Configure AWS_ROLE_ARN and AWS_REGION under Repository Variables."
+            echo "::error::Configure VITE_* URLs under Settings → Environments → ${{ inputs.github-environment }} → Environment variables."
             exit 1
           fi
 
@@ -109,6 +127,14 @@ jobs:
           fi
 
       - name: Build application
+        env:
+          NODE_ENV: production
+          VITE_LANDING_URL: ${{ vars.VITE_LANDING_URL }}
+          VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL }}
+          VITE_APP_URL: ${{ vars.VITE_APP_URL }}
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_APP_VERSION: ${{ vars.VITE_APP_VERSION }}
+          PUBLIC_SITE_URL: ${{ vars.PUBLIC_SITE_URL }}
         run: |
           if [ "${{ inputs.package-manager }}" = "pnpm" ]; then
             pnpm run build
@@ -167,8 +193,10 @@ jobs:
             echo "| CloudFront distribution | \`${{ inputs.cloudfront-distribution-id }}\` |"
             echo "| Invalidation ID | \`${{ steps.invalidate.outputs.invalidation-id }}\` |"
             echo "| AWS region | \`${{ vars.AWS_REGION }}\` |"
+            echo "| GitHub environment | \`${{ inputs.github-environment }}\` |"
             echo ""
             echo "Authentication: GitHub OIDC via Repository Variables (no access keys)."
+            echo "Build env: VITE_* from GitHub Environment variables."
             echo ""
             echo "**Cache strategy:** \`/assets/*\` long TTL; \`index.html\` short TTL; full \`/*\` invalidation (optimize later)."
           } >> "$GITHUB_STEP_SUMMARY"
