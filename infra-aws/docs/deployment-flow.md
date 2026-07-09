@@ -118,7 +118,7 @@ The **Deploy Infrastructure** workflow checks for the `CDKToolkit` CloudFormatio
 ### Recommended first deploy sequence
 
 1. Configure Repository Variables on `novasafe-deployment` (`AWS_ROLE_ARN`, `AWS_REGION`, `CDK_DEFAULT_ACCOUNT`, `CDK_DEFAULT_REGION`)
-2. Bootstrap `ap-south-1` (primary) and `us-east-1` (ACM for CloudFront) via **Bootstrap CDK**
+2. Run **Bootstrap CDK** once (bootstraps `ap-south-1` and `us-east-1` automatically)
 3. **Deploy Infrastructure** → `Foundation` (OIDC + validation)
 4. **Deploy Infrastructure** → `Landing` (see below)
 5. Add ACM DNS validation CNAMEs in Cloudflare (from ACM console)

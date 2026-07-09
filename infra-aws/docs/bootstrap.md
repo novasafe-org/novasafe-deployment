@@ -70,12 +70,15 @@ Configure under **Settings → Secrets and variables → Actions → Variables**
 
 ## Multi-region note (Landing stack)
 
-NovaSafe primary infrastructure runs in **`ap-south-1`**. Landing uses an ACM certificate in **`us-east-1`** only (mandatory AWS requirement for CloudFront custom domains).
+NovaSafe primary infrastructure runs in **`ap-south-1`**. Landing also needs **`us-east-1`** bootstrapped for the CloudFront ACM certificate (mandatory AWS requirement — not used for S3 or the main stack).
 
-Bootstrap **both** regions before deploying Landing:
+**Bootstrap CDK** bootstraps **both regions in a single workflow run** when your Repository Variables point at `ap-south-1`:
 
-1. Set `CDK_DEFAULT_REGION=ap-south-1` and `AWS_REGION=ap-south-1`, run **Bootstrap CDK**
-2. Update both variables to `us-east-1`, run **Bootstrap CDK** again (ACM certificate only)
+```
+Actions → Bootstrap CDK → Run workflow
+```
+
+No need to change variables or run twice.
 
 The **Deploy Infrastructure** workflow checks for `CDKToolkit` in both regions when deploying Landing or All stacks.
 
