@@ -117,14 +117,14 @@ jobs:
           fi
 
       - name: Configure AWS credentials (OIDC)
-        uses: ./.github/actions/configure-aws
+        uses: novasafe-org/novasafe-deployment/.github/actions/configure-aws@master
         with:
           role-arn: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           role-session-name: novasafe-${{ inputs.application-name }}
 
       - name: Sync build to S3
-        uses: ./.github/actions/deploy-s3
+        uses: novasafe-org/novasafe-deployment/.github/actions/deploy-s3@master
         with:
           bucket-name: ${{ inputs.s3-bucket }}
           source-directory: ${{ inputs.build-directory }}
@@ -132,7 +132,7 @@ jobs:
 
       - name: Invalidate CloudFront cache
         id: invalidate
-        uses: ./.github/actions/invalidate-cloudfront
+        uses: novasafe-org/novasafe-deployment/.github/actions/invalidate-cloudfront@master
         with:
           distribution-id: ${{ inputs.cloudfront-distribution-id }}
           paths: /*
