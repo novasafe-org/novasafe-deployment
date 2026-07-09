@@ -96,6 +96,7 @@ jobs:
     uses: novasafe-org/novasafe-deployment/.github/workflows/deploy-frontend-aws.yml@master
     with:
       application-name: novasafe-landing-v2
+      package-manager: pnpm
       s3-bucket: <LandingStack BucketName output>
       cloudfront-distribution-id: <LandingStack DistributionId output>
 ```
