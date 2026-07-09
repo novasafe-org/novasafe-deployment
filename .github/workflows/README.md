@@ -85,7 +85,7 @@ Deployment complete
 Set Repository Variables on `novasafe-landing-v2`:
 
 - `AWS_ROLE_ARN` — from `GitHubOidcStack` output `GitHubActionsDeployRoleArn`
-- `AWS_REGION` — e.g. `eu-west-1`
+- `AWS_REGION` — e.g. `ap-south-1`
 
 ```yaml
 jobs:

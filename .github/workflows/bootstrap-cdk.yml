@@ -126,5 +126,5 @@ jobs:
             echo ""
             echo "The \`CDKToolkit\` stack is ready. You can now run **Deploy Infrastructure**."
             echo ""
-            echo "> **Note:** Landing stacks use ACM certificates in \`us-east-1\`. If \`${CDK_DEFAULT_REGION}\` is not \`us-east-1\`, update \`CDK_DEFAULT_REGION\` and \`AWS_REGION\` to bootstrap \`us-east-1\` as a second run (or bootstrap manually once)."
+            echo "> **Note:** Primary region is \`ap-south-1\`. ACM certificates for CloudFront must also bootstrap \`us-east-1\` once — update \`CDK_DEFAULT_REGION\` and \`AWS_REGION\` to \`us-east-1\` and run this workflow again (or bootstrap manually)."
           } >> "$GITHUB_STEP_SUMMARY"

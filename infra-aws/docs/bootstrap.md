@@ -64,18 +64,18 @@ Configure under **Settings → Secrets and variables → Actions → Variables**
 | Variable | Example | Purpose |
 |----------|---------|---------|
 | `AWS_ROLE_ARN` | `arn:aws:iam::123456789012:role/novasafe-prod-github-deploy` | OIDC-assumable IAM role |
-| `AWS_REGION` | `eu-west-1` | Region for AWS CLI session |
+| `AWS_REGION` | `ap-south-1` | Region for AWS CLI session |
 | `CDK_DEFAULT_ACCOUNT` | `123456789012` | Target AWS account ID |
-| `CDK_DEFAULT_REGION` | `eu-west-1` | Region to bootstrap |
+| `CDK_DEFAULT_REGION` | `ap-south-1` | Primary region to bootstrap |
 
 ## Multi-region note (Landing stack)
 
-NovaSafe Landing uses ACM certificates in **`us-east-1`** (CloudFront requirement) while primary infrastructure runs in **`eu-west-1`**.
+NovaSafe primary infrastructure runs in **`ap-south-1`**. Landing uses an ACM certificate in **`us-east-1`** only (mandatory AWS requirement for CloudFront custom domains).
 
 Bootstrap **both** regions before deploying Landing:
 
-1. Set `CDK_DEFAULT_REGION=eu-west-1` and `AWS_REGION=eu-west-1`, run **Bootstrap CDK**
-2. Update both variables to `us-east-1`, run **Bootstrap CDK** again
+1. Set `CDK_DEFAULT_REGION=ap-south-1` and `AWS_REGION=ap-south-1`, run **Bootstrap CDK**
+2. Update both variables to `us-east-1`, run **Bootstrap CDK** again (ACM certificate only)
 
 The **Deploy Infrastructure** workflow checks for `CDKToolkit` in both regions when deploying Landing or All stacks.
 
@@ -93,7 +93,7 @@ Re-running on an already-bootstrapped region is safe — CDK updates the toolkit
 cd infra-aws/cdk
 npm install
 npm run build
-npx cdk bootstrap aws://<ACCOUNT_ID>/eu-west-1 -c env=production
+npx cdk bootstrap aws://<ACCOUNT_ID>/ap-south-1 -c env=production
 npx cdk bootstrap aws://<ACCOUNT_ID>/us-east-1 -c env=production
 ```
 
