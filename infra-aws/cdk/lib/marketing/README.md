@@ -16,3 +16,12 @@ Maps to repository: `novasafe-landing-v2` (application code deployed separately)
 | Logging | CloudFront access logs (S3) + CloudWatch log group |
 
 Reusable building blocks live in `lib/shared/static-site/`.
+
+## CloudFormation outputs
+
+| Output | Purpose |
+|--------|---------|
+| `LandingBucketName` | S3 sync target for `novasafe-landing-v2` CI |
+| `LandingDistributionId` | CloudFront cache invalidation |
+| `LandingDistributionDomainName` | Cloudflare origin CNAME |
+| `LandingCertificateArn` | ACM certificate reference (us-east-1) |

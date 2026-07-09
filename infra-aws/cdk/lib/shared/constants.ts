@@ -25,3 +25,9 @@ export const DEFAULT_OWNER = 'novasafe-org' as const;
 
 /** IaC tooling identifier for the ManagedBy tag. */
 export const MANAGED_BY = 'aws-cdk' as const;
+
+/**
+ * ACM certificates used by CloudFront must be created in us-east-1 (AWS global requirement).
+ * This is independent of the primary workload region configured per environment.
+ */
+export const CLOUDFRONT_CERTIFICATE_REGION = 'us-east-1' as const;

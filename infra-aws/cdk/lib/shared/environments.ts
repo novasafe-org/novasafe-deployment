@@ -109,14 +109,45 @@ export function resolveEnvironment(app: cdk.App): NovaSafeEnvironment {
 }
 
 /**
+ * Resolves the target AWS account for CDK deployment.
+ *
+ * Prefers standard CDK/GitHub Actions environment variables so deploy workflows
+ * never rely on placeholder values in {@link ENVIRONMENTS}.
+ */
+export function resolveAwsAccount(
+  environment: NovaSafeEnvironment,
+): string {
+  return (
+    process.env.CDK_DEFAULT_ACCOUNT?.trim() ||
+    process.env.AWS_ACCOUNT_ID?.trim() ||
+    environment.awsAccount
+  );
+}
+
+/**
+ * Resolves the target AWS region for CDK deployment.
+ *
+ * Prefers `CDK_DEFAULT_REGION` / `AWS_REGION` from CI, then the environment config.
+ */
+export function resolveAwsRegion(
+  environment: NovaSafeEnvironment,
+): string {
+  return (
+    process.env.CDK_DEFAULT_REGION?.trim() ||
+    process.env.AWS_REGION?.trim() ||
+    environment.awsRegion
+  );
+}
+
+/**
  * Converts a NovaSafe environment into CDK `env` props for stack synthesis.
  */
 export function toCdkEnvironment(
   environment: NovaSafeEnvironment,
 ): cdk.Environment {
   return {
-    account: environment.awsAccount,
-    region: environment.awsRegion,
+    account: resolveAwsAccount(environment),
+    region: resolveAwsRegion(environment),
   };
 }
 

@@ -1,6 +1,7 @@
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import { CLOUDFRONT_CERTIFICATE_REGION } from '../constants';
 
 export interface SiteCertificateStackProps extends cdk.StackProps {
   readonly primaryDomain: string;
@@ -22,7 +23,7 @@ export class SiteCertificateStack extends cdk.Stack {
       ...props,
       env: {
         account: parentStack.account,
-        region: 'us-east-1',
+        region: CLOUDFRONT_CERTIFICATE_REGION,
       },
       description: `ACM certificate for ${props.primaryDomain} (us-east-1, DNS validation)`,
     });

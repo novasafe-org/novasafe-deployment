@@ -117,14 +117,73 @@ The **Deploy Infrastructure** workflow checks for the `CDKToolkit` CloudFormatio
 
 ### Recommended first deploy sequence
 
-1. Replace placeholder account IDs in `infra-aws/cdk/lib/shared/environments.ts`
-2. Configure Repository Variables on `novasafe-deployment`
-3. Bootstrap `eu-west-1` and `us-east-1` via **Bootstrap CDK**
-4. **Deploy Infrastructure** → `Foundation` (OIDC + validation)
-5. **Deploy Infrastructure** → `Landing`
-6. Add ACM DNS validation CNAMEs in Cloudflare
-7. Point DNS to CloudFront
-8. Copy stack outputs to application repo workflows (see below)
+1. Configure Repository Variables on `novasafe-deployment` (`AWS_ROLE_ARN`, `AWS_REGION`, `CDK_DEFAULT_ACCOUNT`, `CDK_DEFAULT_REGION`)
+2. Bootstrap primary region and `us-east-1` via **Bootstrap CDK**
+3. **Deploy Infrastructure** → `Foundation` (OIDC + validation)
+4. **Deploy Infrastructure** → `Landing` (see below)
+5. Add ACM DNS validation CNAMEs in Cloudflare (from ACM console)
+6. Point `novasafe.io` / `www.novasafe.io` DNS to CloudFront
+7. Copy Landing stack outputs to `novasafe-landing-v2` Repository Variables / workflow inputs
+
+### Landing stack deployment
+
+```
+Actions → Deploy Infrastructure → Landing
+        ↓
+CDK deploys novasafe-prod-landing (+ nested ACM stack in us-east-1)
+        ↓
+CloudFormation creates AWS resources
+        ↓
+Stack outputs published
+        ↓
+novasafe-landing-v2 deploys React build to S3
+```
+
+#### Resources provisioned
+
+| Resource | Purpose |
+|----------|---------|
+| Private S3 bucket | Landing site content (`index.html`, `/assets/*`) |
+| CloudFront distribution | Global CDN with custom domain |
+| Origin Access Control (OAC) | Secure S3 origin (not legacy OAI) |
+| ACM certificate | TLS for `novasafe.io` + `www.novasafe.io` (us-east-1) |
+| Cache policies | SPA shell vs fingerprinted `/assets/*` |
+| Origin request policy | Minimal S3 origin forwarding |
+| Response headers policy | Security headers (HSTS, CSP, etc.) |
+| CloudWatch log group | Operational logging namespace |
+| S3 access log bucket | CloudFront access logs (90-day retention) |
+
+DNS validation and Cloudflare CNAME cutover remain manual — Route53 is not used.
+
+#### CloudFormation outputs
+
+| Output | Used for |
+|--------|----------|
+| `LandingBucketName` | `s3-bucket` in landing deploy workflow |
+| `LandingDistributionId` | CloudFront invalidation |
+| `LandingDistributionDomainName` | Cloudflare origin / CNAME target |
+| `LandingCertificateArn` | Reference / troubleshooting |
+
+View outputs in the workflow job summary or:
+
+```bash
+aws cloudformation describe-stacks \
+  --stack-name novasafe-prod-landing \
+  --query 'Stacks[0].Outputs'
+```
+
+#### Validate before deploy
+
+```bash
+cd infra-aws/cdk
+npm ci && npm run build
+CDK_DEFAULT_ACCOUNT=<account> CDK_DEFAULT_REGION=<region> \
+  npx cdk synth novasafe-prod-landing -c env=production
+CDK_DEFAULT_ACCOUNT=<account> CDK_DEFAULT_REGION=<region> \
+  npx cdk diff novasafe-prod-landing -c env=production
+```
+
+`cdk diff` should show only Landing stack resources (plus the nested certificate stack in `us-east-1`).
 
 ### Local synth (optional validation)
 
@@ -180,11 +239,13 @@ Current: full `/*` invalidation after every deploy (simple, correct for early st
 
 ### Stack outputs used by app CI
 
-| Output | Caller configuration |
-|--------|---------------------|
-| `BucketName` | `s3-bucket` workflow input |
-| `DistributionId` | `cloudfront-distribution-id` workflow input |
-| `GitHubActionsDeployRoleArn` | `AWS_ROLE_ARN` Repository Variable |
+| LandingStack output | Caller configuration |
+|---------------------|----------------------|
+| `LandingBucketName` | `s3-bucket` workflow input |
+| `LandingDistributionId` | `cloudfront-distribution-id` workflow input |
+| `LandingDistributionDomainName` | Cloudflare DNS / origin |
+| `LandingCertificateArn` | Reference only |
+| `GitHubActionsDeployRoleArn` (Foundation) | `AWS_ROLE_ARN` Repository Variable |
 
 ## CI/CD coexistence
 
