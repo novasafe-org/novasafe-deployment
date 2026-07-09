@@ -3,28 +3,22 @@
 # Manual dispatch — never runs on push. Authenticates via GitHub OIDC;
 # AWS access keys are not used.
 #
-# Required GitHub Environment variables (per environment: development, staging, production):
+# Current model: single production AWS account. CDK targets production stacks
+# (-c env=production). GitHub Environments are not used.
+#
+# Required Repository Variables (Settings → Secrets and variables → Actions → Variables):
 #   AWS_ROLE_ARN         — IAM role ARN to assume (CDK deploy permissions)
 #   AWS_REGION           — Primary AWS region (e.g. eu-west-1)
 #   CDK_DEFAULT_ACCOUNT  — Target AWS account ID
 #   CDK_DEFAULT_REGION   — CDK default region (usually same as AWS_REGION)
 #
-# See infra-aws/docs/deployment-flow.md for setup and bootstrap instructions.
+# See infra-aws/docs/deployment-flow.md
 
 name: Deploy Infrastructure
 
 on:
   workflow_dispatch:
     inputs:
-      environment:
-        description: Target environment
-        required: true
-        type: choice
-        default: development
-        options:
-          - development
-          - staging
-          - production
       stack:
         description: Stack to deploy
         required: true
@@ -40,20 +34,19 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-infrastructure-${{ inputs.environment }}-${{ inputs.stack }}
+  group: deploy-infrastructure-${{ inputs.stack }}
   cancel-in-progress: false
 
 jobs:
   deploy:
-    name: CDK Deploy (${{ inputs.environment }} / ${{ inputs.stack }})
+    name: CDK Deploy (production / ${{ inputs.stack }})
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     defaults:
       run:
         working-directory: infra-aws/cdk
 
     env:
-      DEPLOY_ENV: ${{ inputs.environment }}
+      CDK_ENV: production
       DEPLOY_STACK: ${{ inputs.stack }}
       AWS_REGION: ${{ vars.AWS_REGION }}
       AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
@@ -66,7 +59,7 @@ jobs:
         working-directory: .
         run: echo "start=$(date -u +%s)" >> "$GITHUB_OUTPUT"
 
-      - name: Validate GitHub variables
+      - name: Validate repository variables
         working-directory: .
         run: |
           set -euo pipefail
@@ -78,8 +71,8 @@ jobs:
             fi
           done
           if [ "${#missing[@]}" -gt 0 ]; then
-            echo "::error::Missing GitHub Environment variables for '${DEPLOY_ENV}': ${missing[*]}"
-            echo "::error::Configure them under Settings → Environments → ${DEPLOY_ENV} → Environment variables."
+            echo "::error::Missing Repository Variables: ${missing[*]}"
+            echo "::error::Configure under Settings → Secrets and variables → Actions → Variables."
             echo "::error::OIDC only — do not use AWS access keys or repository secrets."
             exit 1
           fi
@@ -105,7 +98,7 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
-          role-session-name: novasafe-cdk-${{ inputs.environment }}
+          role-session-name: novasafe-cdk-deploy
 
       - name: Verify AWS identity
         run: aws sts get-caller-identity
@@ -114,15 +107,8 @@ jobs:
         id: stacks
         run: |
           set -euo pipefail
-          case "$DEPLOY_ENV" in
-            development) SHORT=dev ;;
-            staging)     SHORT=staging ;;
-            production)  SHORT=prod ;;
-            *)
-              echo "::error::Unknown environment: $DEPLOY_ENV"
-              exit 1
-              ;;
-          esac
+          SHORT=prod
+
           echo "short=$SHORT" >> "$GITHUB_OUTPUT"
 
           case "$DEPLOY_STACK" in
@@ -166,9 +152,7 @@ jobs:
 
             if [[ "$status" != "CREATE_COMPLETE" && "$status" != "UPDATE_COMPLETE" ]]; then
               echo "::error::CDK bootstrap not found in ${region} (status: ${status})."
-              echo "::error::Bootstrap must be executed once per account/region before deploying:"
-              echo "::error::  cd infra-aws/cdk"
-              echo "::error::  npx cdk bootstrap aws://${CDK_DEFAULT_ACCOUNT}/${region} -c env=${DEPLOY_ENV}"
+              echo "::error::Run the Bootstrap CDK workflow once per account/region before deploying."
               echo "::error::Automatic bootstrap is intentionally disabled in this workflow."
               exit 1
             fi
@@ -182,7 +166,7 @@ jobs:
           fi
 
       - name: CDK Synth
-        run: npx cdk synth -c "env=${DEPLOY_ENV}"
+        run: npx cdk synth -c "env=${CDK_ENV}"
 
       - name: CDK Diff
         id: diff
@@ -191,16 +175,16 @@ jobs:
           set -o pipefail
           TARGETS="${{ steps.stacks.outputs.targets }}"
           if [ "$TARGETS" = "--all" ]; then
-            npx cdk diff --all -c "env=${DEPLOY_ENV}" 2>&1 | tee ../cdk-diff.txt
+            npx cdk diff --all -c "env=${CDK_ENV}" 2>&1 | tee ../cdk-diff.txt
           else
             # shellcheck disable=SC2086
-            npx cdk diff $TARGETS -c "env=${DEPLOY_ENV}" 2>&1 | tee ../cdk-diff.txt
+            npx cdk diff $TARGETS -c "env=${CDK_ENV}" 2>&1 | tee ../cdk-diff.txt
           fi
 
       - name: Upload CDK diff artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cdk-diff-${{ inputs.environment }}-${{ inputs.stack }}-${{ github.run_id }}
+          name: cdk-diff-${{ inputs.stack }}-${{ github.run_id }}
           path: infra-aws/cdk-diff.txt
           retention-days: 30
           if-no-files-found: error
@@ -211,10 +195,10 @@ jobs:
           set -euo pipefail
           TARGETS="${{ steps.stacks.outputs.targets }}"
           if [ "$TARGETS" = "--all" ]; then
-            npx cdk deploy --all -c "env=${DEPLOY_ENV}" --require-approval never
+            npx cdk deploy --all -c "env=${CDK_ENV}" --require-approval never
           else
             # shellcheck disable=SC2086
-            npx cdk deploy $TARGETS -c "env=${DEPLOY_ENV}" --require-approval never
+            npx cdk deploy $TARGETS -c "env=${CDK_ENV}" --require-approval never
           fi
 
       - name: Collect stack outputs
@@ -286,7 +270,7 @@ jobs:
             echo ""
             echo "| Field | Value |"
             echo "|-------|-------|"
-            echo "| Environment | \`${DEPLOY_ENV}\` |"
+            echo "| CDK environment | \`production\` |"
             echo "| Region | \`${CDK_DEFAULT_REGION}\` |"
             echo "| Account | \`${CDK_DEFAULT_ACCOUNT}\` |"
             echo "| Stack selection | ${STACK_LABEL} |"
@@ -306,4 +290,4 @@ jobs:
           fi
 
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "CDK diff artifact: \`cdk-diff-${DEPLOY_ENV}-${DEPLOY_STACK}-${GITHUB_RUN_ID}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "CDK diff artifact: \`cdk-diff-${DEPLOY_STACK}-${GITHUB_RUN_ID}\`" >> "$GITHUB_STEP_SUMMARY"

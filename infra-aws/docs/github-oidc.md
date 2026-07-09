@@ -11,7 +11,13 @@ NovaSafe uses **GitHub OpenID Connect (OIDC)** so CI/CD workflows can assume AWS
 
 AWS access keys are **not** used for GitHub Actions deployments.
 
-## Authentication flow
+## Current deployment model
+
+NovaSafe currently operates a **single production AWS account**. Workflows authenticate via **Repository Variables** (`AWS_ROLE_ARN`, `AWS_REGION`) — not GitHub Environments.
+
+The IAM role trust policy must allow `repo:<org>/<repo>:ref:refs/heads/<branch>` subjects. **Do not** require `environment:` subjects until GitHub Environments are enabled — workflows no longer set `environment:` on jobs, so OIDC tokens will not include environment claims.
+
+When multiple AWS environments are introduced later, add GitHub Environments and extend the trust policy with `repo:<org>/<repo>:environment:<name>` patterns.
 
 ```
 GitHub Actions workflow
@@ -53,8 +59,8 @@ The deploy role trust policy requires:
 
 1. **Audience** — `token.actions.githubusercontent.com:aud` equals `sts.amazonaws.com`
 2. **Subject** — `token.actions.githubusercontent.com:sub` matches allowed patterns:
-   - `repo:<org>/<placeholder-repo>:ref:refs/heads/<branch>`
-   - `repo:<org>/<placeholder-repo>:environment:<github-environment>`
+   - `repo:<org>/<placeholder-repo>:ref:refs/heads/<branch>` **(required today)**
+   - `repo:<org>/<placeholder-repo>:environment:<github-environment>` *(future — when GitHub Environments are enabled)*
 
 Repository names are **placeholders** (`TODO-*-repository`) until real repos are configured.
 
@@ -77,17 +83,9 @@ The GitHub OIDC provider is **one per AWS account**. When multiple NovaSafe envi
 1. Deploy `GitHubOidcStack` to the target AWS account/environment
 2. Replace repository placeholders in `config/github.ts`
 3. Replace TODO ARNs in inline policies with real resource ARNs
-4. Enable OIDC in reusable workflows:
+4. Workflows read `vars.AWS_ROLE_ARN` from Repository Variables (no `role-to-assume` inputs)
 
-```yaml
-# TODO(OIDC): uncomment when ready
-# - uses: aws-actions/configure-aws-credentials@v4
-#   with:
-#     role-to-assume: arn:aws:iam::ACCOUNT:role/novasafe-dev-github-deploy
-#     aws-region: eu-west-1
-```
-
-5. Application repos call reusable workflows from `novasafe-deployment` with `role-to-assume` from stack outputs
+5. Application repos set `AWS_ROLE_ARN` and `AWS_REGION` as Repository Variables and call reusable workflows from `novasafe-deployment`
 
 ## Related documentation
 

@@ -3,6 +3,8 @@
 # Future responsibility: deploy Lambda function code for novasafe-auth-v2 and
 # novasafe-backend (mobile-api, admin-api).
 #
+# Caller repositories must configure Repository Variables: AWS_ROLE_ARN, AWS_REGION
+#
 # TODO: wire configure-aws and deploy-lambda composite actions.
 # DO NOT authenticate to AWS or deploy anything in this workflow yet.
 
@@ -15,10 +17,6 @@ on:
         description: Application repository name (e.g. novasafe-backend)
         required: true
         type: string
-      environment:
-        description: Target environment (development, staging, production)
-        required: true
-        type: string
       lambda-function-name:
         description: Target Lambda function name
         required: true
@@ -28,16 +26,6 @@ on:
         required: false
         type: string
         default: dist/lambda.zip
-      aws-role-arn:
-        description: IAM role ARN from GitHubOidcStack (OIDC — no long-lived secrets)
-        required: false
-        type: string
-        default: ''
-      aws-region:
-        description: AWS region for deployment
-        required: false
-        type: string
-        default: eu-west-1
     outputs:
       deploy-ready:
         description: Whether the placeholder deploy job completed
@@ -45,18 +33,17 @@ on:
 
 jobs:
   deploy:
-    name: Deploy ${{ inputs.application }} → ${{ inputs.environment }}
+    name: Deploy ${{ inputs.application }} → production
     runs-on: ubuntu-latest
     outputs:
       deploy-ready: ${{ steps.placeholder.outputs.deploy-ready }}
     steps:
-      # TODO(OIDC): Enable GitHub OIDC authentication before any AWS deploy steps.
-      # - name: Configure AWS credentials (OIDC)
-      #   uses: aws-actions/configure-aws-credentials@v4
+      # TODO(OIDC): Enable GitHub OIDC via Repository Variables before any AWS deploy steps.
+      # - uses: ./.github/actions/configure-aws
       #   with:
-      #     role-to-assume: ${{ inputs.aws-role-arn }}
-      #     aws-region: ${{ inputs.aws-region }}
-      #     role-session-name: novasafe-${{ inputs.application }}-${{ inputs.environment }}
+      #     role-arn: ${{ vars.AWS_ROLE_ARN }}
+      #     aws-region: ${{ vars.AWS_REGION }}
+      #     role-session-name: novasafe-${{ inputs.application }}
       #
       # TODO: wire deploy-lambda composite action after OIDC is enabled.
       - name: Placeholder — Lambda deployment not implemented
@@ -64,6 +51,5 @@ jobs:
         run: |
           echo "::notice::TODO: deploy Lambda package to ${{ inputs.lambda-function-name }}"
           echo "application=${{ inputs.application }}"
-          echo "environment=${{ inputs.environment }}"
           echo "artifact-path=${{ inputs.artifact-path }}"
           echo "deploy-ready=true" >> "$GITHUB_OUTPUT"

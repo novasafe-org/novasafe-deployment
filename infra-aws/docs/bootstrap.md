@@ -2,6 +2,12 @@
 
 One-time preparation of an AWS account and region for AWS CDK deployments.
 
+## Deployment model
+
+NovaSafe currently uses a **single production AWS account**. Bootstrap runs against production CDK context (`-c env=production`) using **Repository Variables** — not GitHub Environments.
+
+When multiple AWS environments are introduced later, GitHub Environments can gate bootstrap and deploy workflows per account.
+
 ## Why bootstrap is required
 
 CDK deploys infrastructure via CloudFormation. Before the first deployment, CDK must provision a **bootstrap stack** (`CDKToolkit`) in the target account/region. This stack provides:
@@ -19,7 +25,6 @@ Bootstrap does **not** create application resources (no S3 landing buckets, no C
 | Scope | Frequency |
 |-------|-----------|
 | Per AWS account + region | **Once** |
-| Per NovaSafe environment | Once per linked AWS account |
 
 Re-run only when:
 
@@ -33,16 +38,14 @@ Re-run only when:
 |------|-------|
 | Workflow | `.github/workflows/bootstrap-cdk.yml` |
 | UI name | **Bootstrap CDK** |
-| Trigger | `workflow_dispatch` (manual only) |
+| Trigger | `workflow_dispatch` (manual only, no inputs) |
 
 ### Steps
 
 ```
 Actions → Bootstrap CDK → Run workflow
         ↓
-Select environment (development / staging / production)
-        ↓
-GitHub OIDC → assume IAM role
+GitHub OIDC → assume IAM role (vars.AWS_ROLE_ARN)
         ↓
 cdk bootstrap aws://<account>/<region>
         ↓
@@ -52,17 +55,18 @@ Success summary (account, region, bootstrap version)
 ### Authentication
 
 - **GitHub OIDC only** — no AWS access keys, no GitHub Secrets
-- The IAM role (`AWS_ROLE_ARN`) must trust `token.actions.githubusercontent.com` and allow `cloudformation:*`, `s3:*`, `iam:*`, `ssm:*`, and related bootstrap permissions on the target account
+- The IAM role (`AWS_ROLE_ARN`) must trust `token.actions.githubusercontent.com` with a repository ref subject (e.g. `repo:novasafe-org/novasafe-deployment:ref:refs/heads/master`)
 
-### Required GitHub variables
+### Required Repository Variables
 
-Configure under **Settings → Environments → {environment} → Environment variables**:
+Configure under **Settings → Secrets and variables → Actions → Variables**:
 
 | Variable | Example | Purpose |
 |----------|---------|---------|
-| `AWS_ROLE_ARN` | `arn:aws:iam::123456789012:role/novasafe-dev-github-deploy` | OIDC-assumable IAM role |
-| `AWS_REGION` | `eu-west-1` | Region to bootstrap |
+| `AWS_ROLE_ARN` | `arn:aws:iam::123456789012:role/novasafe-prod-github-deploy` | OIDC-assumable IAM role |
+| `AWS_REGION` | `eu-west-1` | Region for AWS CLI session |
 | `CDK_DEFAULT_ACCOUNT` | `123456789012` | Target AWS account ID |
+| `CDK_DEFAULT_REGION` | `eu-west-1` | Region to bootstrap |
 
 ## Multi-region note (Landing stack)
 
@@ -70,10 +74,18 @@ NovaSafe Landing uses ACM certificates in **`us-east-1`** (CloudFront requiremen
 
 Bootstrap **both** regions before deploying Landing:
 
-1. Run **Bootstrap CDK** with `AWS_REGION=eu-west-1`
-2. Run **Bootstrap CDK** again with `AWS_REGION=us-east-1` (update the environment variable, or use a dedicated environment)
+1. Set `CDK_DEFAULT_REGION=eu-west-1` and `AWS_REGION=eu-west-1`, run **Bootstrap CDK**
+2. Update both variables to `us-east-1`, run **Bootstrap CDK** again
 
 The **Deploy Infrastructure** workflow checks for `CDKToolkit` in both regions when deploying Landing or All stacks.
+
+## How to rerun
+
+1. Verify Repository Variables are correct
+2. Run **Bootstrap CDK** from the Actions tab
+3. Check the job summary for account, region, and bootstrap version
+
+Re-running on an already-bootstrapped region is safe — CDK updates the toolkit stack if needed.
 
 ## Manual alternative (local CLI)
 
@@ -81,8 +93,8 @@ The **Deploy Infrastructure** workflow checks for `CDKToolkit` in both regions w
 cd infra-aws/cdk
 npm install
 npm run build
-npx cdk bootstrap aws://<ACCOUNT_ID>/eu-west-1 -c env=development
-npx cdk bootstrap aws://<ACCOUNT_ID>/us-east-1 -c env=development
+npx cdk bootstrap aws://<ACCOUNT_ID>/eu-west-1 -c env=production
+npx cdk bootstrap aws://<ACCOUNT_ID>/us-east-1 -c env=production
 ```
 
 Prefer the GitHub workflow for auditability and consistent OIDC authentication.
@@ -92,6 +104,7 @@ Prefer the GitHub workflow for auditability and consistent OIDC authentication.
 - Does not deploy `FoundationStack`, `LandingStack`, or any application stack
 - Does not modify Docker/VPS deployment
 - Does not run automatically on push
+- Does not use GitHub Environments
 
 After bootstrap succeeds, use **Deploy Infrastructure** to provision CDK stacks.
 

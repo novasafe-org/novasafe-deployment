@@ -3,6 +3,9 @@
 # Builds a React/Vite app, authenticates via GitHub OIDC, syncs to S3,
 # and invalidates CloudFront. No AWS access keys or GitHub Secrets required.
 #
+# Caller repositories must configure Repository Variables:
+#   AWS_ROLE_ARN, AWS_REGION
+#
 # Consumed by: novasafe-landing-v2, novasafe-app-v2 (future)
 
 name: Deploy Frontend (AWS)
@@ -12,10 +15,6 @@ on:
     inputs:
       application-name:
         description: Application repository name (e.g. novasafe-landing-v2)
-        required: true
-        type: string
-      environment:
-        description: Target environment (development, staging, production)
         required: true
         type: string
       build-directory:
@@ -28,21 +27,12 @@ on:
         required: false
         type: string
         default: '22'
-      aws-region:
-        description: AWS region for S3 and CloudFront API calls
-        required: false
-        type: string
-        default: eu-west-1
       s3-bucket:
         description: Target S3 bucket (LandingStack output BucketName)
         required: true
         type: string
       cloudfront-distribution-id:
         description: CloudFront distribution ID (LandingStack output DistributionId)
-        required: true
-        type: string
-      aws-role-arn:
-        description: IAM deploy role ARN from GitHubOidcStack (OIDC — not a secret)
         required: true
         type: string
     outputs:
@@ -55,7 +45,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy ${{ inputs.application-name }} → ${{ inputs.environment }}
+    name: Deploy ${{ inputs.application-name }} → production
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -63,7 +53,26 @@ jobs:
     outputs:
       deployment-summary: ${{ steps.summary.outputs.deployment-summary }}
       invalidation-id: ${{ steps.invalidate.outputs.invalidation-id }}
+    env:
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
     steps:
+      - name: Validate repository variables
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in AWS_ROLE_ARN AWS_REGION; do
+            value="${!name:-}"
+            if [ -z "$value" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing Repository Variables in ${GITHUB_REPOSITORY}: ${missing[*]}"
+            echo "::error::Configure under Settings → Secrets and variables → Actions → Variables."
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -82,9 +91,9 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: ./.github/actions/configure-aws
         with:
-          role-arn: ${{ inputs.aws-role-arn }}
-          aws-region: ${{ inputs.aws-region }}
-          role-session-name: novasafe-${{ inputs.application-name }}-${{ inputs.environment }}
+          role-arn: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: novasafe-${{ inputs.application-name }}
 
       - name: Sync build to S3
         uses: ./.github/actions/deploy-s3
@@ -104,7 +113,7 @@ jobs:
         id: summary
         shell: bash
         run: |
-          SUMMARY="Deployed ${GITHUB_REPOSITORY} (${{ inputs.application-name }}) to s3://${{ inputs.s3-bucket }} [${{ inputs.environment }}]. CloudFront invalidation: ${{ steps.invalidate.outputs.invalidation-id }}"
+          SUMMARY="Deployed ${GITHUB_REPOSITORY} (${{ inputs.application-name }}) to s3://${{ inputs.s3-bucket }} [production]. CloudFront invalidation: ${{ steps.invalidate.outputs.invalidation-id }}"
           echo "${SUMMARY}"
           echo "deployment-summary=${SUMMARY}" >> "$GITHUB_OUTPUT"
 
@@ -114,14 +123,13 @@ jobs:
             echo "| Field | Value |"
             echo "|-------|-------|"
             echo "| Application | \`${{ inputs.application-name }}\` |"
-            echo "| Environment | \`${{ inputs.environment }}\` |"
             echo "| S3 bucket | \`${{ inputs.s3-bucket }}\` |"
             echo "| Build directory | \`${{ inputs.build-directory }}\` |"
             echo "| CloudFront distribution | \`${{ inputs.cloudfront-distribution-id }}\` |"
             echo "| Invalidation ID | \`${{ steps.invalidate.outputs.invalidation-id }}\` |"
-            echo "| AWS region | \`${{ inputs.aws-region }}\` |"
+            echo "| AWS region | \`${{ vars.AWS_REGION }}\` |"
             echo ""
-            echo "Authentication: GitHub OIDC (no access keys)."
+            echo "Authentication: GitHub OIDC via Repository Variables (no access keys)."
             echo ""
             echo "**Cache strategy:** \`/assets/*\` long TTL; \`index.html\` short TTL; full \`/*\` invalidation (optimize later)."
           } >> "$GITHUB_STEP_SUMMARY"

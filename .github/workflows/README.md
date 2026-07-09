@@ -2,6 +2,19 @@
 
 Reusable workflows and composite actions for NovaSafe AWS deployments.
 
+## Deployment model
+
+**Production only** — single AWS account. All AWS configuration uses **Repository Variables** (`vars.*`), not GitHub Environments.
+
+| Variable | Purpose |
+|----------|---------|
+| `AWS_ROLE_ARN` | OIDC-assumable IAM role |
+| `AWS_REGION` | Primary AWS region |
+| `CDK_DEFAULT_ACCOUNT` | AWS account ID (CDK workflows) |
+| `CDK_DEFAULT_REGION` | CDK default region (CDK workflows) |
+
+GitHub Environments will be introduced when multiple AWS accounts/environments are needed.
+
 ## Status
 
 | Workflow | Status |
@@ -18,9 +31,7 @@ Reusable workflows and composite actions for NovaSafe AWS deployments.
 ```
 Actions → Bootstrap CDK → Run workflow
         ↓
-Select environment
-        ↓
-GitHub OIDC → IAM role
+GitHub OIDC → IAM role (Repository Variables)
         ↓
 cdk bootstrap aws://<account>/<region>
 ```
@@ -32,20 +43,16 @@ See [`infra-aws/docs/bootstrap.md`](../infra-aws/docs/bootstrap.md).
 ```
 Actions → Deploy Infrastructure → Run workflow
         ↓
-Select environment + stack (Foundation / Landing / All)
+Select stack (Foundation / Landing / All)
         ↓
-GitHub OIDC → IAM role (Environment variables)
+GitHub OIDC → IAM role (Repository Variables)
         ↓
 Bootstrap check → CDK synth → CDK diff (artifact) → CDK deploy
         ↓
 Deployment summary
 ```
 
-Configure **Environment variables** per GitHub Environment (`development`, `staging`, `production`):
-
-- `AWS_ROLE_ARN`, `AWS_REGION`, `CDK_DEFAULT_ACCOUNT`, `CDK_DEFAULT_REGION`
-
-See [`infra-aws/docs/deployment-flow.md`](../infra-aws/docs/deployment-flow.md).
+CDK targets `production` stacks (`novasafe-prod-*`). See [`infra-aws/docs/deployment-flow.md`](../infra-aws/docs/deployment-flow.md).
 
 ## Deploy frontend flow
 
@@ -56,7 +63,7 @@ reusable/deploy-frontend-aws.yml
         ↓
 npm ci → npm run build
         ↓
-GitHub OIDC → IAM role
+GitHub OIDC → IAM role (caller Repository Variables)
         ↓
 aws s3 sync (cache-aware)
         ↓
@@ -75,6 +82,11 @@ Deployment complete
 
 ## Example (novasafe-landing-v2)
 
+Set Repository Variables on `novasafe-landing-v2`:
+
+- `AWS_ROLE_ARN` — from `GitHubOidcStack` output `GitHubActionsDeployRoleArn`
+- `AWS_REGION` — e.g. `eu-west-1`
+
 ```yaml
 jobs:
   deploy:
@@ -84,10 +96,8 @@ jobs:
     uses: novasafe-org/novasafe-deployment/.github/workflows/reusable/deploy-frontend-aws.yml@master
     with:
       application-name: novasafe-landing-v2
-      environment: development
       s3-bucket: <LandingStack BucketName output>
       cloudfront-distribution-id: <LandingStack DistributionId output>
-      aws-role-arn: <GitHubOidcStack GitHubActionsDeployRoleArn output>
 ```
 
 No GitHub Secrets required for AWS authentication.
