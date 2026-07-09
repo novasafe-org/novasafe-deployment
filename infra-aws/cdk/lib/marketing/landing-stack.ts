@@ -15,6 +15,8 @@ import { mergeNovaSafeStackProps } from '../shared/types';
  * - CloudFront access logging and CloudWatch log group
  *
  * Application code from `novasafe-landing-v2` is deployed separately via CI/CD.
+ *
+ * CloudFormation outputs use the `Landing*` prefix for consumption by GitHub deploy workflows.
  */
 export class LandingStack extends cdk.Stack {
   public readonly website: StaticWebsite;
@@ -31,36 +33,36 @@ export class LandingStack extends cdk.Stack {
       primaryDomain: props.domains.landing,
     });
 
-    new cdk.CfnOutput(this, 'BucketName', {
+    new cdk.CfnOutput(this, 'LandingBucketName', {
       value: this.website.contentBucket.bucketName,
       description: 'Private S3 bucket for landing site content',
-      exportName: `${id}-bucket-name`,
+      exportName: `${id}-landing-bucket-name`,
     });
 
-    new cdk.CfnOutput(this, 'DistributionId', {
+    new cdk.CfnOutput(this, 'LandingDistributionId', {
       value: this.website.distribution.distributionId,
       description: 'CloudFront distribution ID for cache invalidation',
-      exportName: `${id}-distribution-id`,
+      exportName: `${id}-landing-distribution-id`,
     });
 
-    new cdk.CfnOutput(this, 'DistributionDomainName', {
+    new cdk.CfnOutput(this, 'LandingDistributionDomainName', {
       value: this.website.distribution.distributionDomainName,
       description: 'CloudFront domain — configure as Cloudflare origin/CNAME target',
-      exportName: `${id}-distribution-domain`,
+      exportName: `${id}-landing-distribution-domain`,
     });
 
-    new cdk.CfnOutput(this, 'CertificateArn', {
+    new cdk.CfnOutput(this, 'LandingCertificateArn', {
       value: this.website.certificate.certificateArn,
       description: 'ACM certificate ARN (us-east-1)',
-      exportName: `${id}-certificate-arn`,
+      exportName: `${id}-landing-certificate-arn`,
     });
 
-    new cdk.CfnOutput(this, 'OriginAccessControlId', {
+    new cdk.CfnOutput(this, 'LandingOriginAccessControlId', {
       value: this.website.originAccessControl.originAccessControlId,
       description: 'CloudFront Origin Access Control ID (OAC — not legacy OAI)',
     });
 
-    new cdk.CfnOutput(this, 'CloudWatchLogGroupName', {
+    new cdk.CfnOutput(this, 'LandingCloudWatchLogGroupName', {
       value: this.website.cloudWatchLogGroup.logGroupName,
       description: 'CloudWatch log group for landing CDN operational logs',
     });

@@ -85,6 +85,11 @@ describe('LandingStack', () => {
     });
 
     template.resourceCountIs('AWS::CloudFront::CloudFrontOriginAccessIdentity', 0);
+
+    template.hasOutput('LandingBucketName', {});
+    template.hasOutput('LandingDistributionId', {});
+    template.hasOutput('LandingDistributionDomainName', {});
+    template.hasOutput('LandingCertificateArn', {});
   });
 
   it('includes www.novasafe.io for production certificate SANs', () => {
