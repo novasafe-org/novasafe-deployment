@@ -116,15 +116,26 @@ jobs:
             npm run build
           fi
 
+      - name: Checkout deployment composite actions
+        uses: actions/checkout@v4
+        with:
+          repository: novasafe-org/novasafe-deployment
+          ref: master
+          path: _novasafe-deployment
+          sparse-checkout: |
+            .github/actions/configure-aws
+            .github/actions/deploy-s3
+            .github/actions/invalidate-cloudfront
+
       - name: Configure AWS credentials (OIDC)
-        uses: novasafe-org/novasafe-deployment/.github/actions/configure-aws@master
+        uses: ./_novasafe-deployment/.github/actions/configure-aws
         with:
           role-arn: ${{ vars.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           role-session-name: novasafe-${{ inputs.application-name }}
 
       - name: Sync build to S3
-        uses: novasafe-org/novasafe-deployment/.github/actions/deploy-s3@master
+        uses: ./_novasafe-deployment/.github/actions/deploy-s3
         with:
           bucket-name: ${{ inputs.s3-bucket }}
           source-directory: ${{ inputs.build-directory }}
@@ -132,7 +143,7 @@ jobs:
 
       - name: Invalidate CloudFront cache
         id: invalidate
-        uses: novasafe-org/novasafe-deployment/.github/actions/invalidate-cloudfront@master
+        uses: ./_novasafe-deployment/.github/actions/invalidate-cloudfront
         with:
           distribution-id: ${{ inputs.cloudfront-distribution-id }}
           paths: /*
