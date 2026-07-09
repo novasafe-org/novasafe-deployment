@@ -94,22 +94,47 @@ jobs:
         id: bootstrap
         run: |
           set -euo pipefail
-          echo "Bootstrapping aws://${CDK_DEFAULT_ACCOUNT}/${CDK_DEFAULT_REGION} (cdk env=${CDK_ENV})"
-          cdk bootstrap "aws://${CDK_DEFAULT_ACCOUNT}/${CDK_DEFAULT_REGION}" \
-            -c "env=${CDK_ENV}" \
-            --require-approval never
+          PRIMARY="$CDK_DEFAULT_REGION"
+          ACCOUNT="$CDK_DEFAULT_ACCOUNT"
 
-      - name: Read bootstrap version
+          bootstrap_region() {
+            local region="$1"
+            local label="$2"
+            echo "Bootstrapping ${label}: aws://${ACCOUNT}/${region}"
+            cdk bootstrap "aws://${ACCOUNT}/${region}" \
+              -c "env=${CDK_ENV}" \
+              --require-approval never
+          }
+
+          bootstrap_region "$PRIMARY" "primary region"
+
+          # CloudFront custom-domain ACM certificates must live in us-east-1 (AWS requirement).
+          if [ "$PRIMARY" != "us-east-1" ]; then
+            bootstrap_region "us-east-1" "us-east-1 (CloudFront ACM)"
+          fi
+
+      - name: Read bootstrap versions
         id: version
         run: |
           set -euo pipefail
-          VERSION=$(aws ssm get-parameter \
+          PRIMARY="$CDK_DEFAULT_REGION"
+          PRIMARY_VERSION=$(aws ssm get-parameter \
             --name /cdk-bootstrap/hnb659fds/version \
-            --region "$CDK_DEFAULT_REGION" \
+            --region "$PRIMARY" \
             --query Parameter.Value \
             --output text)
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Bootstrap version: $VERSION"
+          echo "primary_version=$PRIMARY_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Primary bootstrap version (${PRIMARY}): $PRIMARY_VERSION"
+
+          if [ "$PRIMARY" != "us-east-1" ]; then
+            USE1_VERSION=$(aws ssm get-parameter \
+              --name /cdk-bootstrap/hnb659fds/version \
+              --region us-east-1 \
+              --query Parameter.Value \
+              --output text)
+            echo "use1_version=$USE1_VERSION" >> "$GITHUB_OUTPUT"
+            echo "us-east-1 bootstrap version: $USE1_VERSION"
+          fi
 
       - name: Print success summary
         run: |
@@ -120,11 +145,16 @@ jobs:
             echo "|-------|-------|"
             echo "| CDK environment | \`production\` |"
             echo "| AWS Account | \`${CDK_DEFAULT_ACCOUNT}\` |"
-            echo "| Region | \`${CDK_DEFAULT_REGION}\` |"
-            echo "| Bootstrap version | \`${{ steps.version.outputs.version }}\` |"
+            echo "| Primary region | \`${CDK_DEFAULT_REGION}\` |"
+            echo "| Primary bootstrap version | \`${{ steps.version.outputs.primary_version }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "${CDK_DEFAULT_REGION}" != "us-east-1" ]; then
+            {
+              echo "| us-east-1 bootstrap version | \`${{ steps.version.outputs.use1_version }}\` (CloudFront ACM) |"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          {
             echo "| Workflow run | [${GITHUB_RUN_ID}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}) |"
             echo ""
-            echo "The \`CDKToolkit\` stack is ready. You can now run **Deploy Infrastructure**."
-            echo ""
-            echo "> **Note:** Primary region is \`ap-south-1\`. ACM certificates for CloudFront must also bootstrap \`us-east-1\` once — update \`CDK_DEFAULT_REGION\` and \`AWS_REGION\` to \`us-east-1\` and run this workflow again (or bootstrap manually)."
+            echo "Both \`${CDK_DEFAULT_REGION}\` and \`us-east-1\` are ready when deploying **Landing**."
           } >> "$GITHUB_STEP_SUMMARY"
