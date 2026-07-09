@@ -27,6 +27,8 @@ on:
         options:
           - Foundation
           - Landing
+          - Auth
+          - App
           - All
 
 permissions:
@@ -120,6 +122,16 @@ jobs:
             Landing)
               echo "targets=novasafe-${SHORT}-landing" >> "$GITHUB_OUTPUT"
               echo "label=Landing" >> "$GITHUB_OUTPUT"
+              echo "check_us_east=true" >> "$GITHUB_OUTPUT"
+              ;;
+            Auth)
+              echo "targets=novasafe-${SHORT}-auth" >> "$GITHUB_OUTPUT"
+              echo "label=Auth" >> "$GITHUB_OUTPUT"
+              echo "check_us_east=true" >> "$GITHUB_OUTPUT"
+              ;;
+            App)
+              echo "targets=novasafe-${SHORT}-app" >> "$GITHUB_OUTPUT"
+              echo "label=App" >> "$GITHUB_OUTPUT"
               echo "check_us_east=true" >> "$GITHUB_OUTPUT"
               ;;
             All)
@@ -236,6 +248,12 @@ jobs:
               ;;
             Landing)
               collect_outputs "novasafe-${SHORT}-landing"
+              ;;
+            Auth)
+              collect_outputs "novasafe-${SHORT}-auth"
+              ;;
+            App)
+              collect_outputs "novasafe-${SHORT}-app"
               ;;
             All)
               for stack in \

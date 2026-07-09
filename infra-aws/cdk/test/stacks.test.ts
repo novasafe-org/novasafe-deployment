@@ -4,8 +4,6 @@ import { FoundationStack } from '../lib/foundation/foundation-stack';
 import { MonitoringStack } from '../lib/observability/monitoring-stack';
 import { AdminApiStack } from '../lib/platform/admin-api-stack';
 import { ApiStack } from '../lib/platform/api-stack';
-import { AppStack } from '../lib/platform/app-stack';
-import { AuthStack } from '../lib/platform/auth-stack';
 import { SecurityStack } from '../lib/security/security-stack';
 import { getDomainsForEnvironment } from '../lib/shared/domains';
 import {
@@ -44,8 +42,6 @@ describe('placeholder stacks', () => {
 
   it.each([
     ['FoundationStack', FoundationStack],
-    ['AuthStack', AuthStack],
-    ['AppStack', AppStack],
     ['ApiStack', ApiStack],
     ['AdminApiStack', AdminApiStack],
     ['QueueStack', QueueStack],
