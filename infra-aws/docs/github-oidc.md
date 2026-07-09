@@ -91,4 +91,4 @@ The GitHub OIDC provider is **one per AWS account**. When multiple NovaSafe envi
 
 - [GitHub Actions workflows](github-actions.md)
 - [Deployment flow](deployment-flow.md)
-- `.github/workflows/reusable/` — consumer workflows (placeholders)
+- `.github/workflows/deploy-frontend-aws.yml` — reusable frontend deploy (implemented)

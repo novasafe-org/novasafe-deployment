@@ -24,7 +24,7 @@ Placeholder composite action for deploying backend code to AWS Lambda.
 
 ## Consumed by
 
-- `.github/workflows/reusable/deploy-backend-aws.yml` (future)
+- `.github/workflows/deploy-backend-aws.yml` (future)
 
 ## Status
 
