@@ -17,8 +17,8 @@ OIDC only — no AWS access keys, no GitHub Secrets for credentials.
 
 ## Consumed by
 
-- `.github/workflows/reusable/deploy-frontend-aws.yml` (implemented)
-- `.github/workflows/reusable/deploy-backend-aws.yml` (future)
+- `.github/workflows/deploy-frontend-aws.yml` (implemented)
+- `.github/workflows/deploy-backend-aws.yml` (future)
 
 Application repos call reusable **workflows**, not these actions directly.
 

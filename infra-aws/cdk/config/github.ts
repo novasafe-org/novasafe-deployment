@@ -79,22 +79,22 @@ const repositoryPlaceholders: readonly GitHubRepositoryPlaceholder[] = [
 const workflowDefinitions: readonly GitHubWorkflowDefinition[] = [
   {
     key: 'build-frontend',
-    reusableWorkflow: 'reusable/build-frontend.yml',
+    reusableWorkflow: 'build-frontend.yml',
     description: 'Build static frontend artifacts',
   },
   {
     key: 'build-backend',
-    reusableWorkflow: 'reusable/build-backend.yml',
+    reusableWorkflow: 'build-backend.yml',
     description: 'Build backend / Lambda artifacts',
   },
   {
     key: 'deploy-frontend-aws',
-    reusableWorkflow: 'reusable/deploy-frontend-aws.yml',
+    reusableWorkflow: 'deploy-frontend-aws.yml',
     description: 'Deploy frontend to S3 and invalidate CloudFront',
   },
   {
     key: 'deploy-backend-aws',
-    reusableWorkflow: 'reusable/deploy-backend-aws.yml',
+    reusableWorkflow: 'deploy-backend-aws.yml',
     description: 'Deploy backend to Lambda',
   },
 ];
