@@ -53,6 +53,16 @@ on:
         required: false
         type: boolean
         default: true
+      prepare-static-shell:
+        description: Generate index.html for TanStack Start client static deploy
+        required: false
+        type: boolean
+        default: false
+      static-shell-title:
+        description: HTML title when prepare-static-shell is enabled
+        required: false
+        type: string
+        default: NovaSafe
       s3-bucket:
         description: Target S3 bucket (LandingStack output BucketName)
         required: true
@@ -205,6 +215,13 @@ jobs:
             .github/actions/configure-aws
             .github/actions/deploy-s3
             .github/actions/invalidate-cloudfront
+            .github/scripts/prepare-tanstack-static-shell.mjs
+
+      - name: Prepare TanStack static shell
+        if: inputs.prepare-static-shell
+        env:
+          PAGE_TITLE: ${{ inputs.static-shell-title }}
+        run: node _novasafe-deployment/.github/scripts/prepare-tanstack-static-shell.mjs "${{ inputs.build-directory }}"
 
       - name: Configure AWS credentials (OIDC)
         uses: ./_novasafe-deployment/.github/actions/configure-aws
