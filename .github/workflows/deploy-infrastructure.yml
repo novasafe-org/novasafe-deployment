@@ -8,7 +8,7 @@
 #
 # Required Repository Variables (Settings → Secrets and variables → Actions → Variables):
 #   AWS_ROLE_ARN         — IAM role ARN to assume (CDK deploy permissions)
-#   AWS_REGION           — Primary AWS region (e.g. eu-west-1)
+#   AWS_REGION           — Primary AWS region (e.g. ap-south-1)
 #   CDK_DEFAULT_ACCOUNT  — Target AWS account ID
 #   CDK_DEFAULT_REGION   — CDK default region (usually same as AWS_REGION)
 #

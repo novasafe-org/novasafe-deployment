@@ -21,9 +21,9 @@ Configure under **Settings → Secrets and variables → Actions → Variables**
 | Variable | Example | Purpose |
 |----------|---------|---------|
 | `AWS_ROLE_ARN` | `arn:aws:iam::123456789012:role/novasafe-prod-github-deploy` | IAM role for OIDC |
-| `AWS_REGION` | `eu-west-1` | Primary AWS region for CLI calls |
+| `AWS_REGION` | `ap-south-1` | Primary AWS region for CLI calls |
 | `CDK_DEFAULT_ACCOUNT` | `123456789012` | Target AWS account ID |
-| `CDK_DEFAULT_REGION` | `eu-west-1` | CDK default region |
+| `CDK_DEFAULT_REGION` | `ap-south-1` | CDK default region |
 
 **Do not** store AWS access keys in GitHub Secrets. OIDC only.
 
@@ -109,7 +109,7 @@ cd infra-aws/cdk
 npm install
 npm run build
 
-npx cdk bootstrap aws://<ACCOUNT_ID>/eu-west-1 -c env=production
+npx cdk bootstrap aws://<ACCOUNT_ID>/ap-south-1 -c env=production
 npx cdk bootstrap aws://<ACCOUNT_ID>/us-east-1 -c env=production
 ```
 
@@ -118,7 +118,7 @@ The **Deploy Infrastructure** workflow checks for the `CDKToolkit` CloudFormatio
 ### Recommended first deploy sequence
 
 1. Configure Repository Variables on `novasafe-deployment` (`AWS_ROLE_ARN`, `AWS_REGION`, `CDK_DEFAULT_ACCOUNT`, `CDK_DEFAULT_REGION`)
-2. Bootstrap primary region and `us-east-1` via **Bootstrap CDK**
+2. Bootstrap `ap-south-1` (primary) and `us-east-1` (ACM for CloudFront) via **Bootstrap CDK**
 3. **Deploy Infrastructure** → `Foundation` (OIDC + validation)
 4. **Deploy Infrastructure** → `Landing` (see below)
 5. Add ACM DNS validation CNAMEs in Cloudflare (from ACM console)
