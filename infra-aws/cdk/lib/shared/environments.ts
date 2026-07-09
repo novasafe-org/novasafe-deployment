@@ -34,7 +34,7 @@ const developmentEnvironment: NovaSafeEnvironment = {
   /** @todo Replace with the development AWS account ID before deployment. */
   awsAccount: '111111111111',
   /** @todo Confirm the development AWS region before deployment. */
-  awsRegion: 'eu-west-1',
+  awsRegion: 'ap-south-1',
   tags: {
     Environment: 'development',
     CostProfile: 'free-tier',
@@ -47,7 +47,7 @@ const stagingEnvironment: NovaSafeEnvironment = {
   /** @todo Replace with the staging AWS account ID before deployment. */
   awsAccount: '222222222222',
   /** @todo Confirm the staging AWS region before deployment. */
-  awsRegion: 'eu-west-1',
+  awsRegion: 'ap-south-1',
   tags: {
     Environment: 'staging',
     CostProfile: 'free-tier',
@@ -60,7 +60,7 @@ const productionEnvironment: NovaSafeEnvironment = {
   /** @todo Replace with the production AWS account ID before deployment. */
   awsAccount: '333333333333',
   /** @todo Confirm the production AWS region before deployment. */
-  awsRegion: 'eu-west-1',
+  awsRegion: 'ap-south-1',
   tags: {
     Environment: 'production',
     CostProfile: 'standard',
