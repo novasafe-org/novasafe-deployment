@@ -136,7 +136,7 @@ jobs:
           echo "artifact-path=dist/lambda.zip" >> "$GITHUB_OUTPUT"
 
       - name: Upload Lambda artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lambda-${{ inputs.application-name }}-${{ github.run_id }}
           path: dist/lambda.zip
