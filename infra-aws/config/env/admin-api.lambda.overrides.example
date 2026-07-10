@@ -1,0 +1,15 @@
+# Lambda-specific overrides merged on top of your VPS `.env` at package time.
+
+CORE_API_URL=https://mobile-api.novasafe.io
+
+LOG_ENABLE_FILE=false
+LOG_ENABLE_CONSOLE=true
+LOG_DIR=/tmp/logs
+
+# Blog media — S3 bucket name is set by CDK (MEDIA_S3_BUCKET env on the function).
+# Local path is unused when MEDIA_S3_BUCKET is present (future upload adapter).
+MEDIA_STORAGE_PATH=/tmp/uploads
+
+ADMIN_PORT=3130
+PORT=3130
+BIND_HOST=127.0.0.1

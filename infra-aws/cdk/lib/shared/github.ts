@@ -106,6 +106,17 @@ export function placeholderS3BucketArn(
 }
 
 /**
+ * Lambda function ARN for GitHub Actions deployment policies.
+ */
+export function lambdaFunctionArn(
+  environment: NovaSafeEnvironment,
+  accountId: string,
+  purpose: string,
+): string {
+  return `arn:aws:lambda:${environment.awsRegion}:${accountId}:function:${PROJECT_PREFIX}-${environment.shortName}-fn-${purpose}`;
+}
+
+/**
  * Placeholder Lambda function ARN used in future deployment inline policies.
  * @todo Replace with real function ARNs when Lambda stacks are implemented.
  */

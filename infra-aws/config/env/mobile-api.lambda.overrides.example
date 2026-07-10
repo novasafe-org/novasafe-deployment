@@ -1,0 +1,14 @@
+# Lambda-specific overrides merged on top of your VPS `.env` at package time.
+# Copy your production mobile-api `.env`, then apply these overrides in CI via
+# `infra-aws/config/env/mobile-api.lambda.overrides.env`.
+
+# Public URLs (replace Docker internal hostnames)
+ADMIN_API_URL=https://admin-api.novasafe.io
+
+# Logging — Lambda has no persistent disk
+LOG_ENABLE_FILE=false
+LOG_ENABLE_CONSOLE=true
+LOG_DIR=/tmp/logs
+
+# Not used on Lambda (no bind)
+BIND_HOST=127.0.0.1

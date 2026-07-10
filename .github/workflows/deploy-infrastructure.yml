@@ -29,6 +29,8 @@ on:
           - Landing
           - Auth
           - App
+          - MobileApi
+          - AdminApi
           - All
 
 permissions:
@@ -133,6 +135,16 @@ jobs:
               echo "targets=novasafe-${SHORT}-app" >> "$GITHUB_OUTPUT"
               echo "label=App" >> "$GITHUB_OUTPUT"
               echo "check_us_east=true" >> "$GITHUB_OUTPUT"
+              ;;
+            MobileApi)
+              echo "targets=novasafe-${SHORT}-mobile-api" >> "$GITHUB_OUTPUT"
+              echo "label=Mobile API" >> "$GITHUB_OUTPUT"
+              echo "check_us_east=false" >> "$GITHUB_OUTPUT"
+              ;;
+            AdminApi)
+              echo "targets=novasafe-${SHORT}-admin-api" >> "$GITHUB_OUTPUT"
+              echo "label=Admin API" >> "$GITHUB_OUTPUT"
+              echo "check_us_east=false" >> "$GITHUB_OUTPUT"
               ;;
             All)
               echo "targets=--all" >> "$GITHUB_OUTPUT"
@@ -254,6 +266,12 @@ jobs:
               ;;
             App)
               collect_outputs "novasafe-${SHORT}-app"
+              ;;
+            MobileApi)
+              collect_outputs "novasafe-${SHORT}-mobile-api"
+              ;;
+            AdminApi)
+              collect_outputs "novasafe-${SHORT}-admin-api"
               ;;
             All)
               for stack in \
