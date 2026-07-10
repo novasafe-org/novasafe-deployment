@@ -70,10 +70,25 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
+          cache: pnpm
+
+      - name: Verify pnpm workspace allows esbuild
+        run: |
+          set -euo pipefail
+          if [ ! -f pnpm-workspace.yaml ]; then
+            echo "::error::pnpm-workspace.yaml is required for pnpm v11 (allowBuilds)."
+            exit 1
+          fi
+          if ! grep -q 'esbuild: true' pnpm-workspace.yaml; then
+            echo "::error::pnpm-workspace.yaml must include: allowBuilds: esbuild: true"
+            echo "::error::Pull latest master (PR #121) and re-run."
+            exit 1
+          fi
 
       - name: Install pnpm dependencies
         env:
           HUSKY: '0'
+          CI: 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Merge .env with Lambda overrides
@@ -99,7 +114,8 @@ jobs:
 
           if [ -z "${ENV_CONTENT}" ]; then
             echo "::error::GitHub Environment secret '${SECRET_NAME}' is empty or missing."
-            echo "::error::Paste your VPS .env file contents into Settings → Environments → production → Secrets."
+            echo "::error::Repo: novasafe-backend → Settings → Environments → production → Environment secrets"
+            echo "::error::Paste the full VPS .env file as the secret value (same file used on the server)."
             exit 1
           fi
 
