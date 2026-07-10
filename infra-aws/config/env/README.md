@@ -5,7 +5,7 @@ Configuration for AWS Lambda uses the **same `.env` format as VPS Docker**.
 ## How it works
 
 ```
-VPS .env (GitHub secret MOBILE_API_ENV_FILE / ADMIN_API_ENV_FILE)
+VPS .env (fetched over SSH during CI — same file Docker uses)
         +
 Lambda overrides (*.lambda.overrides.example)
         ↓
@@ -27,12 +27,9 @@ loadEnv.ts at cold start (identical to Docker)
 
 ## GitHub setup
 
-Paste your live VPS `.env` into Environment **production** secrets:
+**No per-variable GitHub secrets.** Lambda CI fetches the live VPS `.env` over SSH using the same `SSH_*` and `DEPLOY_PATH` secrets as Docker deploy.
 
-- `MOBILE_API_ENV_FILE`
-- `ADMIN_API_ENV_FILE`
-
-Do **not** create separate Lambda env var lists — reuse the VPS file.
+Optional fallback (not recommended): Environment secret `MOBILE_API_ENV_FILE` / `ADMIN_API_ENV_FILE` with full file paste — only if VPS fetch is unavailable.
 
 ## Local merge test
 

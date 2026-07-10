@@ -1,9 +1,7 @@
 # Reusable workflow — build and package a NovaSafe backend for AWS Lambda.
 #
-# Bundles the same `.env` file format used on VPS into the deployment zip.
-# Caller must provide ENV_FILE_CONTENT (full .env body) via GitHub Environment secret.
-#
-# Required Repository Variables: AWS_ROLE_ARN, AWS_REGION (for future SSM steps)
+# Loads the same `.env` file used on the VPS (via SSH), merges Lambda overrides,
+# and bundles it into the deployment zip. No per-variable GitHub secrets needed.
 
 name: Build Backend (AWS)
 
@@ -23,20 +21,25 @@ on:
         required: false
         type: string
         default: '22'
-      env-secret-name:
-        description: 'Environment secret suffix: MOBILE_API_ENV_FILE or ADMIN_API_ENV_FILE'
-        required: false
+      vps-env-relative-path:
+        description: Path to .env relative to DEPLOY_PATH on VPS (e.g. mobile-api/.env)
+        required: true
         type: string
-        default: MOBILE_API_ENV_FILE
       overrides-env-path:
         description: Path in novasafe-deployment repo to Lambda override env file
         required: true
         type: string
-      github-environment:
-        description: GitHub Environment for secrets
+    secrets:
+      SSH_USER:
+        required: true
+      SSH_HOST:
+        required: true
+      DEPLOY_PATH:
+        required: true
+      SSH_PASSWORD:
         required: false
-        type: string
-        default: production
+      SSH_PRIVATE_KEY:
+        required: false
     outputs:
       artifact-path:
         description: Path to the Lambda zip artifact
@@ -46,7 +49,6 @@ jobs:
   build:
     name: Package ${{ inputs.application-name }} for Lambda
     runs-on: ubuntu-latest
-    environment: ${{ inputs.github-environment }}
     outputs:
       artifact-path: ${{ steps.package.outputs.artifact-path }}
     steps:
@@ -61,6 +63,7 @@ jobs:
           path: _novasafe-deployment
           sparse-checkout: |
             .github/scripts/merge-env-files.mjs
+            .github/scripts/fetch-vps-env.sh
             infra-aws/config/env
 
       - name: Enable Corepack
@@ -81,7 +84,6 @@ jobs:
           fi
           if ! grep -q 'esbuild: true' pnpm-workspace.yaml; then
             echo "::error::pnpm-workspace.yaml must include: allowBuilds: esbuild: true"
-            echo "::error::Pull latest master (PR #121) and re-run."
             exit 1
           fi
 
@@ -91,35 +93,18 @@ jobs:
           CI: 'true'
         run: pnpm install --frozen-lockfile
 
-      - name: Merge .env with Lambda overrides
+      - name: Fetch .env from VPS and merge Lambda overrides
         env:
-          MOBILE_API_ENV_FILE: ${{ secrets.MOBILE_API_ENV_FILE }}
-          ADMIN_API_ENV_FILE: ${{ secrets.ADMIN_API_ENV_FILE }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          case "${{ inputs.service }}" in
-            core)
-              ENV_CONTENT="${MOBILE_API_ENV_FILE:-}"
-              SECRET_NAME="MOBILE_API_ENV_FILE"
-              ;;
-            admin-app)
-              ENV_CONTENT="${ADMIN_API_ENV_FILE:-}"
-              SECRET_NAME="ADMIN_API_ENV_FILE"
-              ;;
-            *)
-              echo "::error::Unknown service: ${{ inputs.service }}"
-              exit 1
-              ;;
-          esac
-
-          if [ -z "${ENV_CONTENT}" ]; then
-            echo "::error::GitHub Environment secret '${SECRET_NAME}' is empty or missing."
-            echo "::error::Repo: novasafe-backend → Settings → Environments → production → Environment secrets"
-            echo "::error::Paste the full VPS .env file as the secret value (same file used on the server)."
-            exit 1
-          fi
-
-          printf '%s' "$ENV_CONTENT" > /tmp/service.env
+          bash _novasafe-deployment/.github/scripts/fetch-vps-env.sh \
+            "${{ inputs.vps-env-relative-path }}" \
+            /tmp/service.env
           node _novasafe-deployment/.github/scripts/merge-env-files.mjs \
             /tmp/lambda.env \
             /tmp/service.env \
