@@ -1,5 +1,5 @@
 name: Deploy Lambda
-description: Placeholder for updating Lambda function code (not implemented).
+description: Upload a Lambda deployment package and optionally publish a new version.
 
 inputs:
   function-name:
@@ -16,17 +16,44 @@ inputs:
 
 outputs:
   deployed:
-    description: Whether the placeholder deploy step completed
-    value: ${{ steps.placeholder.outputs.deployed }}
+    description: Whether Lambda code was updated
+    value: ${{ steps.deploy.outputs.deployed }}
+  version:
+    description: Published Lambda version (when publish=true)
+    value: ${{ steps.deploy.outputs.version }}
 
 runs:
   using: composite
   steps:
-    - name: Placeholder — Lambda update not implemented
-      id: placeholder
+    - name: Validate artifact
       shell: bash
       run: |
-        echo "::notice::TODO: update Lambda function ${{ inputs.function-name }}"
-        echo "artifact-path=${{ inputs.artifact-path }}"
-        echo "publish=${{ inputs.publish }}"
+        set -euo pipefail
+        if [ ! -f "${{ inputs.artifact-path }}" ]; then
+          echo "::error::Lambda artifact not found: ${{ inputs.artifact-path }}"
+          exit 1
+        fi
+        ls -lh "${{ inputs.artifact-path }}"
+
+    - name: Update Lambda function code
+      id: deploy
+      shell: bash
+      run: |
+        set -euo pipefail
+        FN="${{ inputs.function-name }}"
+        ZIP="${{ inputs.artifact-path }}"
+
+        aws lambda update-function-code \
+          --function-name "$FN" \
+          --zip-file "fileb://${ZIP}" \
+          --output json > /tmp/lambda-update.json
+
         echo "deployed=true" >> "$GITHUB_OUTPUT"
+
+        if [ "${{ inputs.publish }}" = "true" ]; then
+          VERSION=$(aws lambda publish-version --function-name "$FN" --query Version --output text)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Published Lambda version: $VERSION"
+        fi
+
+        echo "✔ Updated Lambda function: $FN"

@@ -1,18 +1,21 @@
-# Reusable workflow — build backend (placeholder)
+# Reusable workflow — build and package a NovaSafe backend for AWS Lambda.
 #
-# Future responsibility: install dependencies, run tests, and package a Lambda
-# deployment bundle (novasafe-auth-v2, novasafe-backend).
+# Bundles the same `.env` file format used on VPS into the deployment zip.
+# Caller must provide ENV_FILE_CONTENT (full .env body) via GitHub Environment secret.
 #
-# TODO: implement build steps, artifact upload, and caching.
-# DO NOT authenticate to AWS in this workflow yet.
+# Required Repository Variables: AWS_ROLE_ARN, AWS_REGION (for future SSM steps)
 
 name: Build Backend (AWS)
 
 on:
   workflow_call:
     inputs:
-      application:
-        description: Application repository name (e.g. novasafe-backend)
+      service:
+        description: Backend service directory (core | admin-app)
+        required: true
+        type: string
+      application-name:
+        description: Application label (e.g. novasafe-mobile-api)
         required: true
         type: string
       node-version:
@@ -20,33 +23,103 @@ on:
         required: false
         type: string
         default: '22'
-      working-directory:
-        description: Path to the backend project root
+      env-secret-name:
+        description: 'Environment secret suffix: MOBILE_API_ENV_FILE or ADMIN_API_ENV_FILE'
         required: false
         type: string
-        default: '.'
+        default: MOBILE_API_ENV_FILE
+      overrides-env-path:
+        description: Path in novasafe-deployment repo to Lambda override env file
+        required: true
+        type: string
+      github-environment:
+        description: GitHub Environment for secrets
+        required: false
+        type: string
+        default: production
     outputs:
-      build-ready:
-        description: Whether the placeholder build job completed
-        value: ${{ jobs.build.outputs.build-ready }}
+      artifact-path:
+        description: Path to the Lambda zip artifact
+        value: ${{ jobs.build.outputs.artifact-path }}
 
 jobs:
   build:
-    name: Build ${{ inputs.application }} (production)
+    name: Package ${{ inputs.application-name }} for Lambda
     runs-on: ubuntu-latest
+    environment: ${{ inputs.github-environment }}
     outputs:
-      build-ready: ${{ steps.placeholder.outputs.build-ready }}
+      artifact-path: ${{ steps.package.outputs.artifact-path }}
     steps:
-      # TODO(OIDC): Authenticate via Repository Variables when build steps require AWS.
-      # - uses: ./.github/actions/configure-aws
-      #   with:
-      #     role-arn: ${{ vars.AWS_ROLE_ARN }}
-      #     aws-region: ${{ vars.AWS_REGION }}
-      #     role-session-name: novasafe-${{ inputs.application }}
-      - name: Placeholder — checkout and package not implemented
-        id: placeholder
+      - name: Checkout backend
+        uses: actions/checkout@v4
+
+      - name: Checkout deployment scripts
+        uses: actions/checkout@v4
+        with:
+          repository: novasafe-org/novasafe-deployment
+          ref: master
+          path: _novasafe-deployment
+          sparse-checkout: |
+            .github/scripts/merge-env-files.mjs
+            infra-aws/config/env
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Install pnpm dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Merge .env with Lambda overrides
+        env:
+          MOBILE_API_ENV_FILE: ${{ secrets.MOBILE_API_ENV_FILE }}
+          ADMIN_API_ENV_FILE: ${{ secrets.ADMIN_API_ENV_FILE }}
         run: |
-          echo "::notice::TODO: checkout, install, test, and package Lambda bundle for ${{ inputs.application }}"
-          echo "node-version=${{ inputs.node-version }}"
-          echo "working-directory=${{ inputs.working-directory }}"
-          echo "build-ready=true" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          case "${{ inputs.service }}" in
+            core)
+              ENV_CONTENT="${MOBILE_API_ENV_FILE:-}"
+              SECRET_NAME="MOBILE_API_ENV_FILE"
+              ;;
+            admin-app)
+              ENV_CONTENT="${ADMIN_API_ENV_FILE:-}"
+              SECRET_NAME="ADMIN_API_ENV_FILE"
+              ;;
+            *)
+              echo "::error::Unknown service: ${{ inputs.service }}"
+              exit 1
+              ;;
+          esac
+
+          if [ -z "${ENV_CONTENT}" ]; then
+            echo "::error::GitHub Environment secret '${SECRET_NAME}' is empty or missing."
+            echo "::error::Paste your VPS .env file contents into Settings → Environments → production → Secrets."
+            exit 1
+          fi
+
+          printf '%s' "$ENV_CONTENT" > /tmp/service.env
+          node _novasafe-deployment/.github/scripts/merge-env-files.mjs \
+            /tmp/lambda.env \
+            /tmp/service.env \
+            _novasafe-deployment/${{ inputs.overrides-env-path }}
+
+      - name: Package Lambda zip
+        id: package
+        run: |
+          set -euo pipefail
+          node scripts/package-lambda.mjs \
+            --service ${{ inputs.service }} \
+            --env-file /tmp/lambda.env \
+            --output dist/lambda.zip
+          echo "artifact-path=dist/lambda.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Lambda artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-${{ inputs.application-name }}-${{ github.run_id }}
+          path: dist/lambda.zip
+          retention-days: 7

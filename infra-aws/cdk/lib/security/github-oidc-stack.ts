@@ -10,8 +10,8 @@ import {
   githubPolicyName,
   placeholderApiGatewayArn,
   placeholderCloudFrontDistributionArn,
-  placeholderLambdaArn,
   placeholderS3BucketArn,
+  lambdaFunctionArn,
 } from '../shared/github';
 import type { NovaSafeStackProps } from '../shared/types';
 import { mergeNovaSafeStackProps } from '../shared/types';
@@ -139,7 +139,12 @@ export class GitHubOidcStack extends cdk.Stack {
    * - lambda:UpdateAlias — route traffic to new version
    */
   private attachFutureLambdaPolicy(environment: GitHubOidcStackProps['environment']): void {
-    const functionArn = placeholderLambdaArn(environment, 'api');
+    const account = cdk.Stack.of(this).account;
+    const purposes = ['mobile-api', 'admin-api'] as const;
+    const resources = purposes.flatMap((purpose) => {
+      const arn = lambdaFunctionArn(environment, account, purpose);
+      return [arn, `${arn}:*`];
+    });
 
     this.deployRole.attachInlinePolicy(
       new iam.Policy(this, 'FutureLambdaDeploymentPolicy', {
@@ -155,7 +160,7 @@ export class GitHubOidcStack extends cdk.Stack {
               'lambda:PublishVersion',
               'lambda:UpdateAlias',
             ],
-            resources: [functionArn, `${functionArn}:*`],
+            resources,
           }),
         ],
       }),

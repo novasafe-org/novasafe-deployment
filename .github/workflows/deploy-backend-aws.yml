@@ -1,55 +1,85 @@
-# Reusable workflow — deploy backend to AWS (placeholder)
+# Reusable workflow — deploy a NovaSafe backend Lambda package to AWS.
 #
-# Future responsibility: deploy Lambda function code for novasafe-auth-v2 and
-# novasafe-backend (mobile-api, admin-api).
-#
-# Caller repositories must configure Repository Variables: AWS_ROLE_ARN, AWS_REGION
-#
-# TODO: wire configure-aws and deploy-lambda composite actions.
-# DO NOT authenticate to AWS or deploy anything in this workflow yet.
+# Requires a prior build job that uploaded dist/lambda.zip as an artifact,
+# or build-backend.yml in the same caller workflow.
 
 name: Deploy Backend (AWS)
 
 on:
   workflow_call:
     inputs:
-      application:
-        description: Application repository name (e.g. novasafe-backend)
+      application-name:
+        description: Application label (e.g. novasafe-mobile-api)
         required: true
         type: string
       lambda-function-name:
-        description: Target Lambda function name
+        description: Target Lambda function name (from CDK stack output)
         required: true
         type: string
-      artifact-path:
-        description: Path to the Lambda deployment package
-        required: false
+      artifact-name:
+        description: Uploaded artifact name from build-backend.yml
+        required: true
         type: string
-        default: dist/lambda.zip
+      publish:
+        description: Publish a new Lambda version after deploy
+        required: false
+        type: boolean
+        default: false
     outputs:
-      deploy-ready:
-        description: Whether the placeholder deploy job completed
-        value: ${{ jobs.deploy.outputs.deploy-ready }}
+      deployed:
+        description: Whether deployment succeeded
+        value: ${{ jobs.deploy.outputs.deployed }}
 
 jobs:
   deploy:
-    name: Deploy ${{ inputs.application }} → production
+    name: Deploy ${{ inputs.application-name }} → Lambda
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     outputs:
-      deploy-ready: ${{ steps.placeholder.outputs.deploy-ready }}
+      deployed: ${{ steps.deploy-lambda.outputs.deployed }}
+    env:
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
     steps:
-      # TODO(OIDC): Enable GitHub OIDC via Repository Variables before any AWS deploy steps.
-      # - uses: ./.github/actions/configure-aws
-      #   with:
-      #     role-arn: ${{ vars.AWS_ROLE_ARN }}
-      #     aws-region: ${{ vars.AWS_REGION }}
-      #     role-session-name: novasafe-${{ inputs.application }}
-      #
-      # TODO: wire deploy-lambda composite action after OIDC is enabled.
-      - name: Placeholder — Lambda deployment not implemented
-        id: placeholder
+      - name: Validate repository variables
         run: |
-          echo "::notice::TODO: deploy Lambda package to ${{ inputs.lambda-function-name }}"
-          echo "application=${{ inputs.application }}"
-          echo "artifact-path=${{ inputs.artifact-path }}"
-          echo "deploy-ready=true" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          for name in AWS_ROLE_ARN AWS_REGION; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing repository variable: $name"
+              exit 1
+            fi
+          done
+
+      - name: Checkout deployment actions
+        uses: actions/checkout@v4
+        with:
+          repository: novasafe-org/novasafe-deployment
+          ref: master
+          path: _novasafe-deployment
+          sparse-checkout: |
+            .github/actions/configure-aws
+            .github/actions/deploy-lambda
+
+      - name: Download Lambda artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: dist
+
+      - name: Configure AWS credentials (OIDC)
+        uses: ./_novasafe-deployment/.github/actions/configure-aws
+        with:
+          role-arn: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: novasafe-${{ inputs.application-name }}
+
+      - name: Deploy Lambda package
+        id: deploy-lambda
+        uses: ./_novasafe-deployment/.github/actions/deploy-lambda
+        with:
+          function-name: ${{ inputs.lambda-function-name }}
+          artifact-path: dist/lambda.zip
+          publish: ${{ inputs.publish }}
