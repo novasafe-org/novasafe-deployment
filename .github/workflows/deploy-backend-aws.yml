@@ -25,6 +25,11 @@ on:
         required: false
         type: boolean
         default: false
+      health-probe-path:
+        description: Optional path for post-deploy Lambda smoke test (e.g. /mobile/health)
+        required: false
+        type: string
+        default: ''
     outputs:
       deployed:
         description: Whether deployment succeeded
@@ -83,3 +88,4 @@ jobs:
           function-name: ${{ inputs.lambda-function-name }}
           artifact-path: dist/lambda.zip
           publish: ${{ inputs.publish }}
+          health-probe-path: ${{ inputs.health-probe-path }}
