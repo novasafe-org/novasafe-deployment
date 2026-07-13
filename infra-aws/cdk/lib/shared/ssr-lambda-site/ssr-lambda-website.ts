@@ -2,11 +2,13 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as cdk from 'aws-cdk-lib';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as ecr_assets from 'aws-cdk-lib/aws-ecr-assets';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
+import * as path from 'path';
 import type { NovaSafeEnvironment } from '../environments';
 import { bucketName, lambdaName, physicalName } from '../naming';
 import { SiteCertificateStack } from '../static-site/certificate-stack';
@@ -96,11 +98,14 @@ export class SsrLambdaWebsite extends Construct {
       removalPolicy,
     });
 
+    const bootstrapImageDir = path.join(__dirname, '../../../../docker/auth-lambda-bootstrap');
+
     this.function = new lambda.DockerImageFunction(this, 'Function', {
       functionName: lambdaName(environment, siteName),
       description: `NovaSafe ${siteName} SSR (${environment.name})`,
-      code: lambda.DockerImageCode.fromEcr(this.repository, {
-        tagOrDigest: 'latest',
+      // CDK-built placeholder image so first deploy succeeds before CI pushes to ECR.
+      code: lambda.DockerImageCode.fromImageAsset(bootstrapImageDir, {
+        platform: ecr_assets.Platform.LINUX_ARM64,
       }),
       memorySize: 1024,
       timeout: cdk.Duration.seconds(29),
@@ -160,8 +165,8 @@ export class SsrLambdaWebsite extends Construct {
     });
 
     cdk.Annotations.of(this).addInfo(
-      `SSR site ${siteName}: push container to ${this.repository.repositoryName}, then run CI deploy. ` +
-        'CloudFront → Lambda Function URL (TanStack Start SSR + server functions).',
+      `SSR site ${siteName}: push real container to ${this.repository.repositoryName} via app CI, ` +
+        'then `aws lambda update-function-code --image-uri ...`. CloudFront → Lambda Function URL.',
     );
   }
 }
