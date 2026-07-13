@@ -113,11 +113,11 @@ export class SsrLambdaWebsite extends Construct {
       logGroup,
     });
 
-    this.function.addFunctionUrl({
+    const functionUrl = this.function.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
     });
 
-    const lambdaOrigin = new origins.FunctionUrlOrigin(this.function, {
+    const lambdaOrigin = new origins.FunctionUrlOrigin(functionUrl, {
       readTimeout: cdk.Duration.seconds(30),
     });
 
