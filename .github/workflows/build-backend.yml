@@ -1,9 +1,7 @@
 # Reusable workflow — build and package a NovaSafe backend for AWS Lambda.
 #
-# Bundles the same `.env` file format used on VPS into the deployment zip.
-# Caller must provide ENV_FILE_CONTENT (full .env body) via GitHub Environment secret.
-#
-# Required Repository Variables: AWS_ROLE_ARN, AWS_REGION (for future SSM steps)
+# Downloads the service `.env` from a private S3 config bucket, merges Lambda overrides,
+# and bundles it into the deployment zip. No per-variable GitHub secrets needed.
 
 name: Build Backend (AWS)
 
@@ -23,20 +21,14 @@ on:
         required: false
         type: string
         default: '22'
-      env-secret-name:
-        description: 'Environment secret suffix: MOBILE_API_ENV_FILE or ADMIN_API_ENV_FILE'
-        required: false
+      s3-env-key:
+        description: S3 object key for the service .env (e.g. mobile-api/.env)
+        required: true
         type: string
-        default: MOBILE_API_ENV_FILE
       overrides-env-path:
         description: Path in novasafe-deployment repo to Lambda override env file
         required: true
         type: string
-      github-environment:
-        description: GitHub Environment for secrets
-        required: false
-        type: string
-        default: production
     outputs:
       artifact-path:
         description: Path to the Lambda zip artifact
@@ -46,10 +38,26 @@ jobs:
   build:
     name: Package ${{ inputs.application-name }} for Lambda
     runs-on: ubuntu-latest
-    environment: ${{ inputs.github-environment }}
+    permissions:
+      id-token: write
+      contents: read
     outputs:
       artifact-path: ${{ steps.package.outputs.artifact-path }}
+    env:
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      BACKEND_CONFIG_BUCKET: ${{ vars.BACKEND_CONFIG_BUCKET }}
     steps:
+      - name: Validate repository variables
+        run: |
+          set -euo pipefail
+          for name in AWS_ROLE_ARN AWS_REGION BACKEND_CONFIG_BUCKET; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing repository variable: $name"
+              exit 1
+            fi
+          done
+
       - name: Checkout backend
         uses: actions/checkout@v4
 
@@ -61,6 +69,8 @@ jobs:
           path: _novasafe-deployment
           sparse-checkout: |
             .github/scripts/merge-env-files.mjs
+            .github/scripts/fetch-s3-env.sh
+            .github/actions/configure-aws
             infra-aws/config/env
 
       - name: Enable Corepack
@@ -91,35 +101,20 @@ jobs:
           CI: 'true'
         run: pnpm install --frozen-lockfile
 
-      - name: Merge .env with Lambda overrides
-        env:
-          MOBILE_API_ENV_FILE: ${{ secrets.MOBILE_API_ENV_FILE }}
-          ADMIN_API_ENV_FILE: ${{ secrets.ADMIN_API_ENV_FILE }}
+      - name: Configure AWS credentials (OIDC)
+        uses: ./_novasafe-deployment/.github/actions/configure-aws
+        with:
+          role-arn: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: novasafe-${{ inputs.application-name }}-build
+
+      - name: Fetch .env from S3 and merge Lambda overrides
         run: |
           set -euo pipefail
-          case "${{ inputs.service }}" in
-            core)
-              ENV_CONTENT="${MOBILE_API_ENV_FILE:-}"
-              SECRET_NAME="MOBILE_API_ENV_FILE"
-              ;;
-            admin-app)
-              ENV_CONTENT="${ADMIN_API_ENV_FILE:-}"
-              SECRET_NAME="ADMIN_API_ENV_FILE"
-              ;;
-            *)
-              echo "::error::Unknown service: ${{ inputs.service }}"
-              exit 1
-              ;;
-          esac
-
-          if [ -z "${ENV_CONTENT}" ]; then
-            echo "::error::GitHub Environment secret '${SECRET_NAME}' is empty or missing."
-            echo "::error::Repo: novasafe-backend → Settings → Environments → production → Environment secrets"
-            echo "::error::Paste the full VPS .env file as the secret value (same file used on the server)."
-            exit 1
-          fi
-
-          printf '%s' "$ENV_CONTENT" > /tmp/service.env
+          bash _novasafe-deployment/.github/scripts/fetch-s3-env.sh \
+            "${BACKEND_CONFIG_BUCKET}" \
+            "${{ inputs.s3-env-key }}" \
+            /tmp/service.env
           node _novasafe-deployment/.github/scripts/merge-env-files.mjs \
             /tmp/lambda.env \
             /tmp/service.env \
