@@ -98,7 +98,7 @@ export class SsrLambdaWebsite extends Construct {
       removalPolicy,
     });
 
-    const bootstrapImageDir = path.join(__dirname, '../../../../docker/auth-lambda-bootstrap');
+    const bootstrapImageDir = path.join(__dirname, '../../../docker/auth-lambda-bootstrap');
 
     this.function = new lambda.DockerImageFunction(this, 'Function', {
       functionName: lambdaName(environment, siteName),
