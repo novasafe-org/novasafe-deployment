@@ -21,7 +21,7 @@ function findCertificateTemplate(app: cdk.App): Template {
 }
 
 describe('AuthStack', () => {
-  it('provisions static hosting for start.novasafe.io', () => {
+  it('provisions SSR Lambda hosting for start.novasafe.io', () => {
     const app = new cdk.App();
     const environment = getEnvironment('development');
 
@@ -34,7 +34,9 @@ describe('AuthStack', () => {
     const template = Template.fromStack(stack);
     const certificateTemplate = findCertificateTemplate(app);
 
-    template.resourceCountIs('AWS::S3::Bucket', 2);
+    template.resourceCountIs('AWS::ECR::Repository', 1);
+    template.resourceCountIs('AWS::Lambda::Function', 1);
+    template.resourceCountIs('AWS::S3::Bucket', 1);
     template.resourceCountIs('AWS::CloudFront::Distribution', 1);
     certificateTemplate.resourceCountIs('AWS::CertificateManager::Certificate', 1);
 

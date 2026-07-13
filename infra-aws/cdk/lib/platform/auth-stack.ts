@@ -1,16 +1,17 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { StaticWebsite } from '../shared/static-site';
+import { SsrLambdaWebsite } from '../shared/ssr-lambda-site';
 import type { NovaSafeStackProps } from '../shared/types';
 import { mergeNovaSafeStackProps } from '../shared/types';
 
 /**
- * Auth stack — static hosting for **start.novasafe.io**.
+ * Auth stack — **start.novasafe.io** (Lambda SSR + CloudFront).
  *
- * Application code from `novasafe-auth-v2` is deployed separately via CI/CD.
+ * TanStack Start requires SSR and server functions; static S3-only hosting
+ * cannot run login/signup. Application image is deployed via CI to ECR.
  */
 export class AuthStack extends cdk.Stack {
-  public readonly website: StaticWebsite;
+  public readonly website: SsrLambdaWebsite;
 
   public constructor(scope: Construct, id: string, props: NovaSafeStackProps) {
     super(scope, id, {
@@ -18,28 +19,40 @@ export class AuthStack extends cdk.Stack {
       crossRegionReferences: true,
     });
 
-    this.website = new StaticWebsite(this, 'Website', {
+    this.website = new SsrLambdaWebsite(this, 'Website', {
       environment: props.environment,
       siteName: 'auth',
       primaryDomain: props.domains.start,
       includeWwwAlias: false,
+      environmentVariables: {
+        VITE_AUTH_URL: `https://${props.domains.start}`,
+        VITE_APP_URL: `https://${props.domains.app}`,
+        VITE_LANDING_URL: `https://${props.domains.landing}`,
+        VITE_API_URL: `https://${props.domains.mobileApi}`,
+      },
     });
 
-    new cdk.CfnOutput(this, 'AuthBucketName', {
-      value: this.website.contentBucket.bucketName,
-      description: 'Private S3 bucket for auth site content',
-      exportName: `${id}-auth-bucket-name`,
+    new cdk.CfnOutput(this, 'AuthEcrRepositoryName', {
+      value: this.website.repository.repositoryName,
+      description: 'ECR repository for auth Lambda container image',
+      exportName: `${id}-auth-ecr-repository`,
+    });
+
+    new cdk.CfnOutput(this, 'AuthLambdaFunctionName', {
+      value: this.website.function.functionName,
+      description: 'Lambda function name for auth SSR CI deploy',
+      exportName: `${id}-auth-function-name`,
     });
 
     new cdk.CfnOutput(this, 'AuthDistributionId', {
       value: this.website.distribution.distributionId,
-      description: 'CloudFront distribution ID for cache invalidation',
+      description: 'CloudFront distribution ID',
       exportName: `${id}-auth-distribution-id`,
     });
 
     new cdk.CfnOutput(this, 'AuthDistributionDomainName', {
       value: this.website.distribution.distributionDomainName,
-      description: 'CloudFront domain — configure as Cloudflare origin/CNAME target',
+      description: 'CloudFront domain — Cloudflare CNAME target',
       exportName: `${id}-auth-distribution-domain`,
     });
 
@@ -50,8 +63,7 @@ export class AuthStack extends cdk.Stack {
     });
 
     cdk.Annotations.of(this).addInfo(
-      `Auth infrastructure for ${props.domains.start}. ` +
-        'Add ACM DNS validation records in Cloudflare, then point DNS to CloudFront.',
+      `Auth SSR for ${props.domains.start}. Push image to ECR, update Lambda, invalidate CloudFront.`,
     );
   }
 }
