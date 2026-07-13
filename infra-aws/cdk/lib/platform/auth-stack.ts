@@ -5,10 +5,10 @@ import type { NovaSafeStackProps } from '../shared/types';
 import { mergeNovaSafeStackProps } from '../shared/types';
 
 /**
- * Auth stack — **start.novasafe.io** (Lambda SSR + CloudFront).
+ * Auth stack — **start.novasafe.io** (zip Lambda SSR + CloudFront).
  *
  * TanStack Start requires SSR and server functions; static S3-only hosting
- * cannot run login/signup. Application image is deployed via CI to ECR.
+ * cannot run login/signup. Application zip is deployed via CI (no ECR).
  */
 export class AuthStack extends cdk.Stack {
   public readonly website: SsrLambdaWebsite;
@@ -30,12 +30,6 @@ export class AuthStack extends cdk.Stack {
         VITE_LANDING_URL: `https://${props.domains.landing}`,
         VITE_API_URL: `https://${props.domains.mobileApi}`,
       },
-    });
-
-    new cdk.CfnOutput(this, 'AuthEcrRepositoryName', {
-      value: this.website.repository.repositoryName,
-      description: 'ECR repository for auth Lambda container image',
-      exportName: `${id}-auth-ecr-repository`,
     });
 
     new cdk.CfnOutput(this, 'AuthLambdaFunctionName', {
@@ -63,7 +57,7 @@ export class AuthStack extends cdk.Stack {
     });
 
     cdk.Annotations.of(this).addInfo(
-      `Auth SSR for ${props.domains.start}. Push image to ECR, update Lambda, invalidate CloudFront.`,
+      `Auth SSR for ${props.domains.start}. Deploy zip via GitHub Actions, invalidate CloudFront.`,
     );
   }
 }
