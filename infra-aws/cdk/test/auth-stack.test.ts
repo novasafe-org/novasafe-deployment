@@ -34,8 +34,11 @@ describe('AuthStack', () => {
     const template = Template.fromStack(stack);
     const certificateTemplate = findCertificateTemplate(app);
 
-    template.resourceCountIs('AWS::ECR::Repository', 1);
-    template.resourceCountIs('AWS::Lambda::Function', 1);
+    template.resourceCountIs('AWS::ECR::Repository', 0);
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      FunctionName: 'novasafe-dev-fn-auth',
+      Handler: 'dist/runtimes/lambda.handler',
+    });
     template.resourceCountIs('AWS::S3::Bucket', 1);
     template.resourceCountIs('AWS::CloudFront::Distribution', 1);
     certificateTemplate.resourceCountIs('AWS::CertificateManager::Certificate', 1);

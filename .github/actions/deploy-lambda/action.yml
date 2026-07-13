@@ -9,6 +9,10 @@ inputs:
     description: Path to the deployment package (zip)
     required: false
     default: dist/lambda.zip
+  package-type:
+    description: 'express = esbuild API bundle; ssr = TanStack Start zip (dist/client + dist/server)'
+    required: false
+    default: express
   publish:
     description: Publish a new Lambda version after update
     required: false
@@ -34,6 +38,7 @@ runs:
       run: |
         set -euo pipefail
         ZIP="${{ inputs.artifact-path }}"
+        PKG="${{ inputs.package-type }}"
         if [ ! -f "$ZIP" ]; then
           echo "::error::Lambda artifact not found: $ZIP"
           exit 1
@@ -46,6 +51,23 @@ runs:
         if echo "$listing" | grep -q 'node_modules/'; then
           echo "::error::Lambda zip contains node_modules/. Use esbuild packaging (scripts/package-lambda.mjs)."
           exit 1
+        fi
+
+        if [ "$PKG" = "ssr" ]; then
+          if ! echo "$listing" | grep -Eq 'dist/runtimes/lambda\.(mjs|js)'; then
+            echo "::error::SSR Lambda zip missing dist/runtimes/lambda.mjs (or .js)"
+            exit 1
+          fi
+          if ! echo "$listing" | grep -q 'dist/client/'; then
+            echo "::error::SSR Lambda zip missing dist/client/ static assets"
+            exit 1
+          fi
+          if ! echo "$listing" | grep -q 'dist/server/'; then
+            echo "::error::SSR Lambda zip missing dist/server/ SSR bundle"
+            exit 1
+          fi
+          echo "SSR Lambda package validation passed"
+          exit 0
         fi
 
         if ! echo "$listing" | grep -q 'dist/runtimes/lambda.js'; then

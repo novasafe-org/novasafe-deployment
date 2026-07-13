@@ -1,16 +1,13 @@
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as cdk from 'aws-cdk-lib';
-import * as ecr from 'aws-cdk-lib/aws-ecr';
-import * as ecr_assets from 'aws-cdk-lib/aws-ecr-assets';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
-import * as path from 'path';
 import type { NovaSafeEnvironment } from '../environments';
-import { bucketName, lambdaName, physicalName } from '../naming';
+import { bucketName, lambdaName } from '../naming';
 import { SiteCertificateStack } from '../static-site/certificate-stack';
 import { StaticSiteCloudFrontPolicies } from '../static-site/cloudfront-policies';
 import { resolveStaticSiteDomainNames, type StaticSiteDomainNames } from '../static-site/domain-names';
@@ -27,14 +24,13 @@ export interface SsrLambdaWebsiteProps {
 }
 
 /**
- * TanStack Start / Node SSR on Lambda (container) behind CloudFront.
+ * TanStack Start / Node SSR on zip-based Lambda behind CloudFront.
  *
- * Replaces static S3-only hosting for apps that need SSR and server functions.
+ * No ECR — application code is deployed via CI (`aws lambda update-function-code`).
  */
 export class SsrLambdaWebsite extends Construct {
   public readonly domainNames: StaticSiteDomainNames;
-  public readonly repository: ecr.Repository;
-  public readonly function: lambda.DockerImageFunction;
+  public readonly function: lambda.Function;
   public readonly distribution: cloudfront.Distribution;
   public readonly certificate: ICertificate;
   public readonly accessLogBucket: s3.Bucket;
@@ -86,30 +82,27 @@ export class SsrLambdaWebsite extends Construct {
     });
     this.certificate = certificateStack.certificate;
 
-    this.repository = new ecr.Repository(this, 'Repository', {
-      repositoryName: physicalName(environment, `ecr-${siteName}`),
-      removalPolicy,
-      emptyOnDelete: isDevelopment,
-    });
-
     const logGroup = new logs.LogGroup(this, 'LogGroup', {
       logGroupName: `/aws/lambda/${lambdaName(environment, siteName)}`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy,
     });
 
-    const bootstrapImageDir = path.join(__dirname, '../../../docker/auth-lambda-bootstrap');
-
-    this.function = new lambda.DockerImageFunction(this, 'Function', {
+    this.function = new lambda.Function(this, 'Function', {
       functionName: lambdaName(environment, siteName),
       description: `NovaSafe ${siteName} SSR (${environment.name})`,
-      // CDK-built placeholder image so first deploy succeeds before CI pushes to ECR.
-      code: lambda.DockerImageCode.fromImageAsset(bootstrapImageDir, {
-        platform: ecr_assets.Platform.LINUX_ARM64,
-      }),
+      runtime: lambda.Runtime.NODEJS_20_X,
+      architecture: lambda.Architecture.ARM_64,
+      handler: 'dist/runtimes/lambda.handler',
+      code: lambda.Code.fromInline(`
+exports.handler = async () => ({
+  statusCode: 503,
+  headers: { 'content-type': 'text/html; charset=utf-8' },
+  body: '<!DOCTYPE html><html><body><h1>NovaSafe ${siteName}</h1><p>Awaiting first CI deployment package.</p></body></html>',
+});
+`),
       memorySize: 1024,
       timeout: cdk.Duration.seconds(29),
-      architecture: lambda.Architecture.ARM_64,
       environment: {
         NODE_ENV: 'production',
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
@@ -165,8 +158,8 @@ export class SsrLambdaWebsite extends Construct {
     });
 
     cdk.Annotations.of(this).addInfo(
-      `SSR site ${siteName}: push real container to ${this.repository.repositoryName} via app CI, ` +
-        'then `aws lambda update-function-code --image-uri ...`. CloudFront → Lambda Function URL.',
+      `SSR site ${siteName}: deploy a zip package via app CI ` +
+        '(`aws lambda update-function-code`), then invalidate CloudFront. No ECR.',
     );
   }
 }
