@@ -13,6 +13,10 @@ inputs:
     description: Publish a new Lambda version after update
     required: false
     default: 'false'
+  health-probe-path:
+    description: Optional API Gateway path for post-deploy smoke test (e.g. /mobile/health)
+    required: false
+    default: ''
 
 outputs:
   deployed:
@@ -29,11 +33,32 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        if [ ! -f "${{ inputs.artifact-path }}" ]; then
-          echo "::error::Lambda artifact not found: ${{ inputs.artifact-path }}"
+        ZIP="${{ inputs.artifact-path }}"
+        if [ ! -f "$ZIP" ]; then
+          echo "::error::Lambda artifact not found: $ZIP"
           exit 1
         fi
-        ls -lh "${{ inputs.artifact-path }}"
+        ls -lh "$ZIP"
+
+        listing="$(unzip -l "$ZIP")"
+        echo "$listing"
+
+        if echo "$listing" | grep -q 'node_modules/'; then
+          echo "::error::Lambda zip contains node_modules/. Use esbuild packaging (scripts/package-lambda.mjs)."
+          exit 1
+        fi
+
+        if ! echo "$listing" | grep -q 'dist/runtimes/lambda.js'; then
+          echo "::error::Lambda zip missing bundled handler dist/runtimes/lambda.js"
+          exit 1
+        fi
+
+        handler_bytes="$(unzip -p "$ZIP" dist/runtimes/lambda.js | wc -c | tr -d ' ')"
+        if [ "$handler_bytes" -lt 500000 ]; then
+          echo "::error::Bundled handler is only ${handler_bytes} bytes — expected esbuild bundle (~1–10 MB)."
+          exit 1
+        fi
+        echo "Bundled handler size: $(( handler_bytes / 1024 / 1024 )) MB"
 
     - name: Update Lambda function code
       id: deploy
@@ -48,6 +73,9 @@ runs:
           --zip-file "fileb://${ZIP}" \
           --output json > /tmp/lambda-update.json
 
+        aws lambda wait function-updated --function-name "$FN"
+        echo "Lambda code update completed for: $FN"
+
         echo "deployed=true" >> "$GITHUB_OUTPUT"
 
         if [ "${{ inputs.publish }}" = "true" ]; then
@@ -57,3 +85,28 @@ runs:
         fi
 
         echo "✔ Updated Lambda function: $FN"
+
+    - name: Smoke test Lambda handler
+      if: inputs.health-probe-path != ''
+      shell: bash
+      run: |
+        set -euo pipefail
+        FN="${{ inputs.function-name }}"
+        PATH_PROBE="${{ inputs.health-probe-path }}"
+        PAYLOAD=$(jq -nc \
+          --arg path "$PATH_PROBE" \
+          '{rawPath: $path, requestContext: {http: {method: "GET", path: $path}}}')
+
+        aws lambda invoke \
+          --function-name "$FN" \
+          --payload "$PAYLOAD" \
+          --cli-binary-format raw-in-base64-out \
+          /tmp/lambda-smoke.json
+
+        cat /tmp/lambda-smoke.json
+        STATUS="$(jq -r '.statusCode // empty' /tmp/lambda-smoke.json)"
+        if [ "$STATUS" != "200" ]; then
+          echo "::error::Lambda smoke test failed for $PATH_PROBE (statusCode=$STATUS)"
+          exit 1
+        fi
+        echo "✔ Lambda smoke test passed: $PATH_PROBE → 200"
