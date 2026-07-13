@@ -1,6 +1,6 @@
 # Reusable workflow — build and package a NovaSafe backend for AWS Lambda.
 #
-# Loads the same `.env` file used on the VPS (via SSH), merges Lambda overrides,
+# Downloads the service `.env` from a private S3 config bucket, merges Lambda overrides,
 # and bundles it into the deployment zip. No per-variable GitHub secrets needed.
 
 name: Build Backend (AWS)
@@ -21,25 +21,14 @@ on:
         required: false
         type: string
         default: '22'
-      vps-env-relative-path:
-        description: Path to .env relative to DEPLOY_PATH on VPS (e.g. mobile-api/.env)
+      s3-env-key:
+        description: S3 object key for the service .env (e.g. mobile-api/.env)
         required: true
         type: string
       overrides-env-path:
         description: Path in novasafe-deployment repo to Lambda override env file
         required: true
         type: string
-    secrets:
-      SSH_USER:
-        required: true
-      SSH_HOST:
-        required: true
-      DEPLOY_PATH:
-        required: true
-      SSH_PASSWORD:
-        required: false
-      SSH_PRIVATE_KEY:
-        required: false
     outputs:
       artifact-path:
         description: Path to the Lambda zip artifact
@@ -49,9 +38,26 @@ jobs:
   build:
     name: Package ${{ inputs.application-name }} for Lambda
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
     outputs:
       artifact-path: ${{ steps.package.outputs.artifact-path }}
+    env:
+      AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      BACKEND_CONFIG_BUCKET: ${{ vars.BACKEND_CONFIG_BUCKET }}
     steps:
+      - name: Validate repository variables
+        run: |
+          set -euo pipefail
+          for name in AWS_ROLE_ARN AWS_REGION BACKEND_CONFIG_BUCKET; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing repository variable: $name"
+              exit 1
+            fi
+          done
+
       - name: Checkout backend
         uses: actions/checkout@v4
 
@@ -63,7 +69,8 @@ jobs:
           path: _novasafe-deployment
           sparse-checkout: |
             .github/scripts/merge-env-files.mjs
-            .github/scripts/fetch-vps-env.sh
+            .github/scripts/fetch-s3-env.sh
+            .github/actions/configure-aws
             infra-aws/config/env
 
       - name: Enable Corepack
@@ -84,6 +91,7 @@ jobs:
           fi
           if ! grep -q 'esbuild: true' pnpm-workspace.yaml; then
             echo "::error::pnpm-workspace.yaml must include: allowBuilds: esbuild: true"
+            echo "::error::Pull latest master (PR #121) and re-run."
             exit 1
           fi
 
@@ -93,17 +101,19 @@ jobs:
           CI: 'true'
         run: pnpm install --frozen-lockfile
 
-      - name: Fetch .env from VPS and merge Lambda overrides
-        env:
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Configure AWS credentials (OIDC)
+        uses: ./_novasafe-deployment/.github/actions/configure-aws
+        with:
+          role-arn: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: novasafe-${{ inputs.application-name }}-build
+
+      - name: Fetch .env from S3 and merge Lambda overrides
         run: |
           set -euo pipefail
-          bash _novasafe-deployment/.github/scripts/fetch-vps-env.sh \
-            "${{ inputs.vps-env-relative-path }}" \
+          bash _novasafe-deployment/.github/scripts/fetch-s3-env.sh \
+            "${BACKEND_CONFIG_BUCKET}" \
+            "${{ inputs.s3-env-key }}" \
             /tmp/service.env
           node _novasafe-deployment/.github/scripts/merge-env-files.mjs \
             /tmp/lambda.env \
