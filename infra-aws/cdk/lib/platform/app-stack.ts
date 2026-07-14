@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { SsrLambdaWebsite } from '../shared/ssr-lambda-site';
+import { ssrSessionEnvironmentVariables } from '../shared/ssr-session-env';
 import type { NovaSafeStackProps } from '../shared/types';
 import { mergeNovaSafeStackProps } from '../shared/types';
 
@@ -25,6 +26,7 @@ export class AppStack extends cdk.Stack {
       primaryDomain: props.domains.app,
       includeWwwAlias: false,
       environmentVariables: {
+        ...ssrSessionEnvironmentVariables(props.domains),
         VITE_AUTH_URL: `https://${props.domains.start}`,
         VITE_APP_URL: `https://${props.domains.app}`,
         VITE_LANDING_URL: `https://${props.domains.landing}`,
