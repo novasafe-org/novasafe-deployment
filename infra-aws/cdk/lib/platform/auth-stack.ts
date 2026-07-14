@@ -34,6 +34,12 @@ export class AuthStack extends cdk.Stack {
       },
     });
 
+    new cdk.CfnOutput(this, 'AuthBucketName', {
+      value: this.website.contentBucket.bucketName,
+      description: 'S3 bucket for /assets/* static files',
+      exportName: `${id}-auth-bucket-name`,
+    });
+
     new cdk.CfnOutput(this, 'AuthLambdaFunctionName', {
       value: this.website.function.functionName,
       description: 'Lambda function name for auth SSR CI deploy',
