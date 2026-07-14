@@ -49,4 +49,22 @@ describe('AppStack', () => {
       }),
     });
   });
+
+  it('imports existing content bucket in production', () => {
+    const app = new cdk.App();
+    const environment = getEnvironment('production');
+
+    const stack = new AppStack(app, 'test-app-prod', {
+      environment,
+      domains: getDomainsForEnvironment(environment),
+      env: toCdkEnvironment(environment),
+    });
+
+    const template = Template.fromStack(stack);
+
+    template.resourceCountIs('AWS::S3::Bucket', 1);
+    template.hasOutput('AppBucketName', {
+      Value: `novasafe-prod-bucket-app-${environment.awsAccount}`,
+    });
+  });
 });

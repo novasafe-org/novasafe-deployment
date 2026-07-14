@@ -20,6 +20,12 @@ export interface SsrLambdaWebsiteProps {
   /** Primary hostname served by CloudFront. */
   readonly primaryDomain: string;
   readonly includeWwwAlias?: boolean;
+  /**
+   * Reference an existing content bucket instead of creating one.
+   * Required in production for auth/app — buckets were RETAINed when those
+   * stacks migrated from static S3 hosting to Lambda SSR.
+   */
+  readonly importContentBucket?: boolean;
   /** Non-secret runtime env for the container (VITE_* URLs, etc.). */
   readonly environmentVariables?: Record<string, string>;
 }
@@ -31,7 +37,7 @@ export interface SsrLambdaWebsiteProps {
  */
 export class SsrLambdaWebsite extends Construct {
   public readonly domainNames: StaticSiteDomainNames;
-  public readonly contentBucket: s3.Bucket;
+  public readonly contentBucket: s3.IBucket;
   public readonly function: lambda.Function;
   public readonly distribution: cloudfront.Distribution;
   public readonly certificate: ICertificate;
@@ -84,15 +90,23 @@ export class SsrLambdaWebsite extends Construct {
     });
     this.certificate = certificateStack.certificate;
 
-    this.contentBucket = new s3.Bucket(this, 'ContentBucket', {
-      bucketName: `${bucketName(environment, siteName)}-${accountSuffix}`,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-      versioned: true,
-      encryption: s3.BucketEncryption.S3_MANAGED,
-      removalPolicy,
-      autoDeleteObjects: isDevelopment,
-    });
+    const contentBucketName = `${bucketName(environment, siteName)}-${accountSuffix}`;
+
+    let contentBucket: s3.IBucket;
+    if (props.importContentBucket) {
+      contentBucket = s3.Bucket.fromBucketName(this, 'ContentBucket', contentBucketName);
+    } else {
+      contentBucket = new s3.Bucket(this, 'ContentBucket', {
+        bucketName: contentBucketName,
+        blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+        enforceSSL: true,
+        versioned: true,
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        removalPolicy,
+        autoDeleteObjects: isDevelopment,
+      }) as s3.IBucket;
+    }
+    this.contentBucket = contentBucket;
 
     const originAccessControl = new cloudfront.S3OriginAccessControl(this, 'OriginAccessControl', {
       originAccessControlName: physicalName(environment, `${siteName}-oac`),
