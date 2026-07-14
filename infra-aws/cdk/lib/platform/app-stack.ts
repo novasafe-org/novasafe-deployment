@@ -1,16 +1,17 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { StaticWebsite } from '../shared/static-site';
+import { SsrLambdaWebsite } from '../shared/ssr-lambda-site';
 import type { NovaSafeStackProps } from '../shared/types';
 import { mergeNovaSafeStackProps } from '../shared/types';
 
 /**
- * App stack — static hosting for **app.novasafe.io**.
+ * App stack — **app.novasafe.io** (zip Lambda SSR + CloudFront).
  *
- * Application code from `novasafe-app-v2` is deployed separately via CI/CD.
+ * TanStack Start requires SSR and server functions; static S3-only hosting
+ * cannot run the authenticated vault UI. Application zip is deployed via CI.
  */
 export class AppStack extends cdk.Stack {
-  public readonly website: StaticWebsite;
+  public readonly website: SsrLambdaWebsite;
 
   public constructor(scope: Construct, id: string, props: NovaSafeStackProps) {
     super(scope, id, {
@@ -18,28 +19,34 @@ export class AppStack extends cdk.Stack {
       crossRegionReferences: true,
     });
 
-    this.website = new StaticWebsite(this, 'Website', {
+    this.website = new SsrLambdaWebsite(this, 'Website', {
       environment: props.environment,
       siteName: 'app',
       primaryDomain: props.domains.app,
       includeWwwAlias: false,
+      environmentVariables: {
+        VITE_AUTH_URL: `https://${props.domains.start}`,
+        VITE_APP_URL: `https://${props.domains.app}`,
+        VITE_LANDING_URL: `https://${props.domains.landing}`,
+        VITE_API_URL: `https://${props.domains.mobileApi}`,
+      },
     });
 
-    new cdk.CfnOutput(this, 'AppBucketName', {
-      value: this.website.contentBucket.bucketName,
-      description: 'Private S3 bucket for app site content',
-      exportName: `${id}-app-bucket-name`,
+    new cdk.CfnOutput(this, 'AppLambdaFunctionName', {
+      value: this.website.function.functionName,
+      description: 'Lambda function name for app SSR CI deploy',
+      exportName: `${id}-app-function-name`,
     });
 
     new cdk.CfnOutput(this, 'AppDistributionId', {
       value: this.website.distribution.distributionId,
-      description: 'CloudFront distribution ID for cache invalidation',
+      description: 'CloudFront distribution ID',
       exportName: `${id}-app-distribution-id`,
     });
 
     new cdk.CfnOutput(this, 'AppDistributionDomainName', {
       value: this.website.distribution.distributionDomainName,
-      description: 'CloudFront domain — configure as Cloudflare origin/CNAME target',
+      description: 'CloudFront domain — Cloudflare CNAME target',
       exportName: `${id}-app-distribution-domain`,
     });
 
@@ -50,8 +57,7 @@ export class AppStack extends cdk.Stack {
     });
 
     cdk.Annotations.of(this).addInfo(
-      `App infrastructure for ${props.domains.app}. ` +
-        'Add ACM DNS validation records in Cloudflare, then point DNS to CloudFront.',
+      `App SSR for ${props.domains.app}. Deploy zip via GitHub Actions, invalidate CloudFront.`,
     );
   }
 }

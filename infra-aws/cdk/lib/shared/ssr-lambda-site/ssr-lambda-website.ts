@@ -83,7 +83,7 @@ export class SsrLambdaWebsite extends Construct {
     });
     this.certificate = certificateStack.certificate;
 
-    const placeholderDir = path.join(__dirname, '../../../lambda/auth-ssr-placeholder');
+    const placeholderDir = path.join(__dirname, `../../../lambda/${siteName}-ssr-placeholder`);
 
     this.function = new lambda.Function(this, 'Function', {
       functionName: lambdaName(environment, siteName),

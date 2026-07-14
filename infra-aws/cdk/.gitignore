@@ -4,6 +4,6 @@
 node_modules
 cdk.out
 dist
-!lambda/auth-ssr-placeholder/dist/**
+!lambda/**/dist/**
 .cdk.staging
 cdk.context.json
