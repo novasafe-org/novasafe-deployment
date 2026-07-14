@@ -34,6 +34,12 @@ export class AppStack extends cdk.Stack {
       },
     });
 
+    new cdk.CfnOutput(this, 'AppBucketName', {
+      value: this.website.contentBucket.bucketName,
+      description: 'S3 bucket for /assets/* static files',
+      exportName: `${id}-app-bucket-name`,
+    });
+
     new cdk.CfnOutput(this, 'AppLambdaFunctionName', {
       value: this.website.function.functionName,
       description: 'Lambda function name for app SSR CI deploy',

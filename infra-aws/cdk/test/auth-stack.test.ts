@@ -39,7 +39,7 @@ describe('AuthStack', () => {
       FunctionName: 'novasafe-dev-fn-auth',
       Handler: 'dist/runtimes/lambda.handler',
     });
-    template.resourceCountIs('AWS::S3::Bucket', 1);
+    template.resourceCountIs('AWS::S3::Bucket', 2);
     template.resourceCountIs('AWS::CloudFront::Distribution', 1);
     certificateTemplate.resourceCountIs('AWS::CertificateManager::Certificate', 1);
 

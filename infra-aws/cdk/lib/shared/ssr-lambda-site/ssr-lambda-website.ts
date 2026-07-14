@@ -8,7 +8,7 @@ import type { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import type { NovaSafeEnvironment } from '../environments';
-import { bucketName, lambdaName } from '../naming';
+import { bucketName, lambdaName, physicalName } from '../naming';
 import { SiteCertificateStack } from '../static-site/certificate-stack';
 import { StaticSiteCloudFrontPolicies } from '../static-site/cloudfront-policies';
 import { resolveStaticSiteDomainNames, type StaticSiteDomainNames } from '../static-site/domain-names';
@@ -31,6 +31,7 @@ export interface SsrLambdaWebsiteProps {
  */
 export class SsrLambdaWebsite extends Construct {
   public readonly domainNames: StaticSiteDomainNames;
+  public readonly contentBucket: s3.Bucket;
   public readonly function: lambda.Function;
   public readonly distribution: cloudfront.Distribution;
   public readonly certificate: ICertificate;
@@ -82,6 +83,27 @@ export class SsrLambdaWebsite extends Construct {
       subjectAlternativeNames: [...this.domainNames.aliases],
     });
     this.certificate = certificateStack.certificate;
+
+    this.contentBucket = new s3.Bucket(this, 'ContentBucket', {
+      bucketName: `${bucketName(environment, siteName)}-${accountSuffix}`,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
+      versioned: true,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      removalPolicy,
+      autoDeleteObjects: isDevelopment,
+    });
+
+    const originAccessControl = new cloudfront.S3OriginAccessControl(this, 'OriginAccessControl', {
+      originAccessControlName: physicalName(environment, `${siteName}-oac`),
+      description: `OAC for ${siteName} static assets (${environment.name})`,
+      signing: cloudfront.Signing.SIGV4_ALWAYS,
+    });
+
+    const assetsOrigin = origins.S3BucketOrigin.withOriginAccessControl(
+      this.contentBucket as s3.IBucket,
+      { originAccessControl },
+    );
 
     const placeholderDir = path.join(__dirname, `../../../lambda/${siteName}-ssr-placeholder`);
 
@@ -138,9 +160,14 @@ export class SsrLambdaWebsite extends Construct {
       defaultBehavior: ssrBehavior,
       additionalBehaviors: {
         '/assets/*': {
-          ...ssrBehavior,
+          origin: assetsOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD_OPTIONS,
+          compress: true,
           cachePolicy: this.policies.assetsCachePolicy,
+          originRequestPolicy: this.policies.originRequestPolicy,
+          responseHeadersPolicy: this.policies.responseHeadersPolicy,
         },
       },
       logBucket: this.accessLogBucket as s3.IBucket,
@@ -149,8 +176,8 @@ export class SsrLambdaWebsite extends Construct {
     });
 
     cdk.Annotations.of(this).addInfo(
-      `SSR site ${siteName}: deploy a zip package via app CI ` +
-        '(`aws lambda update-function-code`), then invalidate CloudFront. No ECR.',
+      `SSR site ${siteName}: deploy Lambda zip + sync dist/client to ` +
+        `${this.contentBucket.bucketName}, then invalidate CloudFront.`,
     );
   }
 }
