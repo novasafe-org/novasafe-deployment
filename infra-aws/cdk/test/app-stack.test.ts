@@ -63,6 +63,7 @@ describe('AppStack', () => {
     const template = Template.fromStack(stack);
 
     template.resourceCountIs('AWS::S3::Bucket', 1);
+    template.resourceCountIs('AWS::S3::BucketPolicy', 2);
     template.hasOutput('AppBucketName', {
       Value: `novasafe-prod-bucket-app-${environment.awsAccount}`,
     });
