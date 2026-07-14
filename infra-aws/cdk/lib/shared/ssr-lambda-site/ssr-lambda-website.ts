@@ -189,6 +189,35 @@ export class SsrLambdaWebsite extends Construct {
       logIncludesCookies: false,
     });
 
+    // Imported buckets skip the auto policy that S3BucketOrigin adds for managed buckets.
+    if (props.importContentBucket) {
+      new s3.CfnBucketPolicy(this, 'ContentBucketPolicy', {
+        bucket: contentBucketName,
+        policyDocument: {
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: { Service: 'cloudfront.amazonaws.com' },
+              Action: 's3:GetObject',
+              Resource: `arn:aws:s3:::${contentBucketName}/*`,
+              Condition: {
+                StringEquals: {
+                  'AWS:SourceArn': cdk.Stack.of(this).formatArn({
+                    service: 'cloudfront',
+                    region: '',
+                    resource: 'distribution',
+                    resourceName: this.distribution.distributionId,
+                    arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
+                  }),
+                },
+              },
+            },
+          ],
+        },
+      });
+    }
+
     cdk.Annotations.of(this).addInfo(
       `SSR site ${siteName}: deploy Lambda zip + sync dist/client to ` +
         `${this.contentBucket.bucketName}, then invalidate CloudFront.`,

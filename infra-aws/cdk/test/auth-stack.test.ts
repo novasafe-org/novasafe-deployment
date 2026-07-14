@@ -64,6 +64,7 @@ describe('AuthStack', () => {
 
     // Content bucket is imported (RETAINed from static-site era); only cf-logs bucket is created.
     template.resourceCountIs('AWS::S3::Bucket', 1);
+    template.resourceCountIs('AWS::S3::BucketPolicy', 2);
     template.hasOutput('AuthBucketName', {
       Value: `novasafe-prod-bucket-auth-${environment.awsAccount}`,
     });
