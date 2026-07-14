@@ -6,6 +6,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { ICertificate } from 'aws-cdk-lib/aws-certificatemanager';
 import { Construct } from 'constructs';
+import * as path from 'path';
 import type { NovaSafeEnvironment } from '../environments';
 import { bucketName, lambdaName } from '../naming';
 import { SiteCertificateStack } from '../static-site/certificate-stack';
@@ -82,19 +83,15 @@ export class SsrLambdaWebsite extends Construct {
     });
     this.certificate = certificateStack.certificate;
 
+    const placeholderDir = path.join(__dirname, '../../../lambda/auth-ssr-placeholder');
+
     this.function = new lambda.Function(this, 'Function', {
       functionName: lambdaName(environment, siteName),
       description: `NovaSafe ${siteName} SSR (${environment.name})`,
       runtime: lambda.Runtime.NODEJS_20_X,
       architecture: lambda.Architecture.ARM_64,
       handler: 'dist/runtimes/lambda.handler',
-      code: lambda.Code.fromInline(`
-exports.handler = async () => ({
-  statusCode: 503,
-  headers: { 'content-type': 'text/html; charset=utf-8' },
-  body: '<!DOCTYPE html><html><body><h1>NovaSafe ${siteName}</h1><p>Awaiting first CI deployment package.</p></body></html>',
-});
-`),
+      code: lambda.Code.fromAsset(placeholderDir),
       memorySize: 1024,
       timeout: cdk.Duration.seconds(29),
       logRetention: logs.RetentionDays.ONE_MONTH,
