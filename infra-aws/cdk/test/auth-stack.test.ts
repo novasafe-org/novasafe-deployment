@@ -49,4 +49,23 @@ describe('AuthStack', () => {
       }),
     });
   });
+
+  it('imports existing content bucket in production', () => {
+    const app = new cdk.App();
+    const environment = getEnvironment('production');
+
+    const stack = new AuthStack(app, 'test-auth-prod', {
+      environment,
+      domains: getDomainsForEnvironment(environment),
+      env: toCdkEnvironment(environment),
+    });
+
+    const template = Template.fromStack(stack);
+
+    // Content bucket is imported (RETAINed from static-site era); only cf-logs bucket is created.
+    template.resourceCountIs('AWS::S3::Bucket', 1);
+    template.hasOutput('AuthBucketName', {
+      Value: `novasafe-prod-bucket-auth-${environment.awsAccount}`,
+    });
+  });
 });

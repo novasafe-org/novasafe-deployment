@@ -25,6 +25,7 @@ export class AppStack extends cdk.Stack {
       siteName: 'app',
       primaryDomain: props.domains.app,
       includeWwwAlias: false,
+      importContentBucket: props.environment.name === 'production',
       environmentVariables: {
         ...ssrSessionEnvironmentVariables(props.domains),
         VITE_AUTH_URL: `https://${props.domains.start}`,
