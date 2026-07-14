@@ -82,12 +82,6 @@ export class SsrLambdaWebsite extends Construct {
     });
     this.certificate = certificateStack.certificate;
 
-    const logGroup = new logs.LogGroup(this, 'LogGroup', {
-      logGroupName: `/aws/lambda/${lambdaName(environment, siteName)}`,
-      retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy,
-    });
-
     this.function = new lambda.Function(this, 'Function', {
       functionName: lambdaName(environment, siteName),
       description: `NovaSafe ${siteName} SSR (${environment.name})`,
@@ -103,12 +97,12 @@ exports.handler = async () => ({
 `),
       memorySize: 1024,
       timeout: cdk.Duration.seconds(29),
+      logRetention: logs.RetentionDays.ONE_MONTH,
       environment: {
         NODE_ENV: 'production',
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
         ...props.environmentVariables,
       },
-      logGroup,
     });
 
     const functionUrl = this.function.addFunctionUrl({
