@@ -40,6 +40,17 @@ describe('LandingStack', () => {
     template.resourceCountIs('AWS::CloudFront::CachePolicy', 2);
     template.resourceCountIs('AWS::CloudFront::OriginRequestPolicy', 1);
     template.resourceCountIs('AWS::CloudFront::ResponseHeadersPolicy', 1);
+    template.hasResourceProperties('AWS::CloudFront::ResponseHeadersPolicy', {
+      ResponseHeadersPolicyConfig: Match.objectLike({
+        SecurityHeadersConfig: Match.objectLike({
+          ContentSecurityPolicy: Match.objectLike({
+            ContentSecurityPolicy: Match.stringLikeRegexp(
+              "connect-src 'self' https://\\*\\.novasafe\\.io",
+            ),
+          }),
+        }),
+      }),
+    });
     template.resourceCountIs('AWS::Logs::LogGroup', 1);
     certificateTemplate.resourceCountIs('AWS::CertificateManager::Certificate', 1);
 
