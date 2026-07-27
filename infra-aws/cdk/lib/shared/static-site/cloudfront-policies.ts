@@ -91,11 +91,19 @@ export class StaticSiteCloudFrontPolicies extends Construct {
           contentSecurityPolicy: {
             contentSecurityPolicy: [
               "default-src 'self'",
+<<<<<<< Updated upstream
               "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: https:",
               "font-src 'self' data: https://fonts.gstatic.com",
               "connect-src 'self' https://*.novasafe.io",
+=======
+              "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "img-src 'self' data: https:",
+              "font-src 'self' data: https://fonts.gstatic.com",
+              "connect-src 'self' https://*.novasafe.io https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com",
+>>>>>>> Stashed changes
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
