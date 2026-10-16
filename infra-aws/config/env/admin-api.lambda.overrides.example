@@ -6,8 +6,11 @@ LOG_ENABLE_FILE=false
 LOG_ENABLE_CONSOLE=true
 LOG_DIR=/tmp/logs
 
-# Blog media — S3 bucket name is set by CDK (MEDIA_S3_BUCKET env on the function).
-# Local path is unused when MEDIA_S3_BUCKET is present (future upload adapter).
+# Blog media — google_drive (recommended on Lambda) or local
+MEDIA_PROVIDER=google_drive
+GOOGLE_DRIVE_FOLDER_ID=
+# Set in S3 admin-api/.env (never commit): GOOGLE_SERVICE_ACCOUNT_JSON=...
+MEDIA_STORAGE_CACHE_ENABLED=true
 MEDIA_STORAGE_PATH=/tmp/uploads
 
 ADMIN_PORT=3130
