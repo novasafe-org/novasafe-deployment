@@ -24,11 +24,15 @@ Upload once to your private config bucket (see `novasafe-backend` deploy docs):
 |---------|--------|
 | Mobile API | `mobile-api/.env` |
 | Admin API | `admin-api/.env` |
+| Auth (start.novasafe.io) | `auth/.env` |
+| App (app.novasafe.io) | `app/.env` |
 
 ```bash
 BUCKET=novasafe-prod-backend-config-<account-id>
 aws s3 cp mobile-api.env s3://$BUCKET/mobile-api/.env --sse AES256
 aws s3 cp admin-api.env  s3://$BUCKET/admin-api/.env  --sse AES256
+aws s3 cp auth.env       s3://$BUCKET/auth/.env       --sse AES256
+aws s3 cp app.env        s3://$BUCKET/app/.env        --sse AES256
 ```
 
 ## Files
@@ -37,6 +41,8 @@ aws s3 cp admin-api.env  s3://$BUCKET/admin-api/.env  --sse AES256
 |------|---------|
 | `mobile-api.lambda.overrides.example` | Lambda-specific overrides for mobile-api |
 | `admin-api.lambda.overrides.example` | Lambda-specific overrides for admin-api |
+| `auth.lambda.overrides.example` | Documented overrides for auth SSR (also in novasafe-auth-v2 `config/lambda.overrides.example`) |
+| `app.lambda.overrides.example` | Documented overrides for app SSR (also in novasafe-app-v2 `config/lambda.overrides.example`) |
 | `opt/novasafe-deployment/mobile-api/.env.example` | Template (same keys as production `.env`) |
 | `opt/novasafe-deployment/platform/admin-api/.env.example` | Template for admin |
 
