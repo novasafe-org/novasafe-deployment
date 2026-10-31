@@ -1,0 +1,2 @@
+# Lambda-specific overrides merged on top of s3://$BACKEND_CONFIG_BUCKET/auth/.env
+NODE_ENV=production
