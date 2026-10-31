@@ -10,7 +10,7 @@ import * as path from 'path';
 import type { NovaSafeEnvironment } from '../environments';
 import { bucketName, lambdaName, physicalName } from '../naming';
 import { SiteCertificateStack } from '../static-site/certificate-stack';
-import { StaticSiteCloudFrontPolicies } from '../static-site/cloudfront-policies';
+import { StaticSiteCloudFrontPolicies, type StaticSiteSecurityProfile } from '../static-site/cloudfront-policies';
 import { resolveStaticSiteDomainNames, type StaticSiteDomainNames } from '../static-site/domain-names';
 
 export interface SsrLambdaWebsiteProps {
@@ -26,6 +26,8 @@ export interface SsrLambdaWebsiteProps {
    * stacks migrated from static S3 hosting to Lambda SSR.
    */
   readonly importContentBucket?: boolean;
+  /** CloudFront CSP profile (auth uses Google Identity Services). */
+  readonly securityProfile?: StaticSiteSecurityProfile;
   /** Non-secret runtime env for the container (VITE_* URLs, etc.). */
   readonly environmentVariables?: Record<string, string>;
 }
@@ -150,6 +152,7 @@ export class SsrLambdaWebsite extends Construct {
       environment,
       siteName,
       primaryDomain,
+      securityProfile: props.securityProfile,
     });
 
     const ssrBehavior: cloudfront.BehaviorOptions = {

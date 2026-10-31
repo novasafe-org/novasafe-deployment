@@ -26,6 +26,7 @@ export class AuthStack extends cdk.Stack {
       primaryDomain: props.domains.start,
       includeWwwAlias: false,
       importContentBucket: props.environment.name === 'production',
+      securityProfile: 'google-sign-in',
       environmentVariables: {
         ...ssrSessionEnvironmentVariables(props.domains),
         VITE_AUTH_URL: `https://${props.domains.start}`,

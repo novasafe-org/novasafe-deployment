@@ -4,6 +4,39 @@ import { Construct } from 'constructs';
 import type { NovaSafeEnvironment } from '../environments';
 import { physicalName } from '../naming';
 
+/** Extra CSP / header rules for sites that load third-party scripts at runtime. */
+export type StaticSiteSecurityProfile = 'default' | 'google-sign-in';
+
+function buildContentSecurityPolicy(profile: StaticSiteSecurityProfile): string {
+  const scriptSrc =
+    profile === 'google-sign-in'
+      ? "script-src 'self' 'unsafe-inline' https://accounts.google.com"
+      : "script-src 'self' 'unsafe-inline'";
+
+  const connectSrc =
+    profile === 'google-sign-in'
+      ? "connect-src 'self' https://*.novasafe.io https://accounts.google.com https://oauth2.googleapis.com"
+      : "connect-src 'self' https://*.novasafe.io";
+
+  const directives = [
+    "default-src 'self'",
+    scriptSrc,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: https:",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    connectSrc,
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ];
+
+  if (profile === 'google-sign-in') {
+    directives.push("frame-src 'self' https://accounts.google.com");
+  }
+
+  return directives.join('; ');
+}
+
 /**
  * CloudFront cache, origin request, and response header policies for React SPAs.
  *
@@ -26,11 +59,16 @@ export class StaticSiteCloudFrontPolicies extends Construct {
       readonly environment: NovaSafeEnvironment;
       readonly siteName: string;
       readonly primaryDomain: string;
+      readonly securityProfile?: StaticSiteSecurityProfile;
     },
   ) {
     super(scope, id);
 
     const prefix = physicalName(props.environment, props.siteName);
+    const securityProfile = props.securityProfile ?? 'default';
+    const contentSecurityPolicy = buildContentSecurityPolicy(securityProfile);
+    const crossOriginOpenerPolicy =
+      securityProfile === 'google-sign-in' ? 'same-origin-allow-popups' : 'same-origin';
 
     this.htmlCachePolicy = new cloudfront.CachePolicy(this, 'HtmlCachePolicy', {
       cachePolicyName: `${prefix}-html-cache`,
@@ -89,17 +127,7 @@ export class StaticSiteCloudFrontPolicies extends Construct {
             override: true,
           },
           contentSecurityPolicy: {
-            contentSecurityPolicy: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'",
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-              "img-src 'self' data: https:",
-              "font-src 'self' data: https://fonts.gstatic.com",
-              "connect-src 'self' https://*.novasafe.io",
-              "frame-ancestors 'none'",
-              "base-uri 'self'",
-              "form-action 'self'",
-            ].join('; '),
+            contentSecurityPolicy,
             override: true,
           },
           xssProtection: {
@@ -117,7 +145,7 @@ export class StaticSiteCloudFrontPolicies extends Construct {
             },
             {
               header: 'Cross-Origin-Opener-Policy',
-              value: 'same-origin',
+              value: crossOriginOpenerPolicy,
               override: true,
             },
             {

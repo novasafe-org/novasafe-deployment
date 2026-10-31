@@ -48,6 +48,16 @@ describe('AuthStack', () => {
         Aliases: Match.arrayWith(['dev.start.novasafe.io']),
       }),
     });
+
+    template.hasResourceProperties('AWS::CloudFront::ResponseHeadersPolicy', {
+      ResponseHeadersPolicyConfig: Match.objectLike({
+        SecurityHeadersConfig: Match.objectLike({
+          ContentSecurityPolicy: Match.objectLike({
+            ContentSecurityPolicy: Match.stringLikeRegexp('accounts\\.google\\.com'),
+          }),
+        }),
+      }),
+    });
   });
 
   it('imports existing content bucket in production', () => {
