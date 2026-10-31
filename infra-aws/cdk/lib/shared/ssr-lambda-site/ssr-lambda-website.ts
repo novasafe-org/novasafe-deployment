@@ -152,7 +152,9 @@ export class SsrLambdaWebsite extends Construct {
       environment,
       siteName,
       primaryDomain,
-      securityProfile: props.securityProfile,
+      ...(props.securityProfile !== undefined
+        ? { securityProfile: props.securityProfile }
+        : {}),
     });
 
     const ssrBehavior: cloudfront.BehaviorOptions = {
