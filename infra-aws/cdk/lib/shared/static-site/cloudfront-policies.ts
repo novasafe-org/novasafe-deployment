@@ -18,10 +18,15 @@ function buildContentSecurityPolicy(profile: StaticSiteSecurityProfile): string 
       ? "connect-src 'self' https://*.novasafe.io https://accounts.google.com https://oauth2.googleapis.com"
       : "connect-src 'self' https://*.novasafe.io";
 
+  const styleSrc =
+    profile === 'google-sign-in'
+      ? "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com"
+      : "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com";
+
   const directives = [
     "default-src 'self'",
     scriptSrc,
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    styleSrc,
     "img-src 'self' data: https:",
     "font-src 'self' data: https://fonts.gstatic.com",
     connectSrc,
